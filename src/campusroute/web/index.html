@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CampusRoute · 操场地图与路线绘制</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="vendor/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+  <script defer src="vendor/leaflet.js"></script>
+  <script defer src="editor.js"></script>
+</head>
+<body>
+  <aside>
+    <p class="eyebrow">CAMPUSROUTE</p>
+    <h1>选择操场，绘制路线</h1>
+    <label for="preset">校区与操场</label>
+    <select id="preset" aria-label="校区与操场"></select>
+    <p id="source" class="muted"></p>
+    <button id="copy">以当前路线开始编辑</button>
+    <div class="divider"></div>
+    <h2>自定义路线</h2>
+    <ol>
+      <li>选择附近校区作为地图中心，或者输入 WGS84 经纬度。</li>
+      <li>点击“开始绘制”，按移动顺序点击地图。拖动地图可以移动视野。</li>
+      <li>环形路线点击“闭合路线”；开放路线会沿原路往返。</li>
+      <li>下载 GeoJSON 文件，在操作窗口选择 <strong>7 → I</strong> 并粘贴文件路径。</li>
+    </ol>
+    <label for="center">地图中心（纬度,经度）</label>
+    <div class="row"><input id="center" placeholder="31.2815,121.5065"><button id="locate">前往</button></div>
+    <label for="name">路线名称</label>
+    <input id="name" value="自定义路线" maxlength="120">
+    <div class="row"><button id="draw">开始绘制</button><button id="undo">撤销最后一点</button></div>
+    <div class="row"><button id="close">闭合路线</button><button id="clear">清空路线</button></div>
+    <button id="download" class="primary">下载 GeoJSON 路线</button>
+    <p id="status" role="status" aria-live="polite">正在加载操场路线……</p>
+    <p class="muted">地图底图需要联网。绘制内容保存在当前浏览器页面，下载后由操作窗口导入。定位控制通过操作窗口执行。</p>
+    <p class="muted">全部坐标使用 WGS84。请勿直接粘贴高德 GCJ-02 或百度 BD-09 坐标。</p>
+    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">路线数据 © OpenStreetMap contributors · ODbL 1.0</a>
+  </aside>
+  <main id="map" aria-label="操场地图"></main>
+</body>
+</html>

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77,<82"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "campusroute"
+version = "1.0.1"
+description = "macOS 上的 iPhone 路线与定位调试工具"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md", "LICENSES/*"]
+dependencies = [
+  "pymobiledevice3==11.36.0",
+  "gpxpy==1.6.2",
+  "geographiclib==2.1",
+  "geojson==3.2.0",
+]
+
+[project.scripts]
+campusroute = "campusroute.console:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+campusroute = ["data/*.geojson", "web/*", "web/vendor/*", "web/vendor/images/*"]

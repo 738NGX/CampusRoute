@@ -1,0 +1,13 @@
+/.conda/
+/work/
+/user-routes/
+/.venv/
+/build/
+/dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+*.log
