@@ -2,7 +2,7 @@
 
 ## 设备要求
 
-- Windows 10/11 64 位，Python 3.11—3.13。
+- Windows 10/11 64 位，Python 最低要求为3.11；版本验证范围见 [README](../README.md#python-版本与平台支持)。
 - Android 10 或更新版本，能够授权 USB 调试和模拟位置信息应用。
 - 支持数据传输的数据线，以及 Android SDK Platform-Tools。Windows 可能需要手机厂商提供的 USB 驱动。
 - 构建 APK 需要 JDK 17 或更新版本，以及 Android SDK 平台35和 Build-Tools 35.0.0。

@@ -34,7 +34,7 @@ class SocketStream:
             self.read_done.clear()
             trace['started'] = time.perf_counter()
             try:
-                while True:
+                while not self.closed:
                     newline = self.buffer.find(b'\n')
                     if newline >= 0:
                         if newline + 1 > self.limit:
@@ -46,7 +46,12 @@ class SocketStream:
                         return raw
                     if len(self.buffer) > self.limit:
                         raise ValueError('Android 回执超过长度限制。')
-                    chunk = self.socket.recv(min(4096, self.limit + 1 - len(self.buffer)))
+                    try:
+                        chunk = self.socket.recv(min(4096, self.limit + 1 - len(self.buffer)))
+                    except OSError:
+                        if not self.closed:
+                            raise
+                        break
                     now = time.perf_counter()
                     if not chunk:
                         trace['eof'] = True
@@ -60,6 +65,10 @@ class SocketStream:
                     trace['bytes'] += len(chunk)
                     trace['chunks'] += 1
                     self.buffer.extend(chunk)
+                # 主动关闭后的读取统一结束，未完成的回复不再参与校验。
+                trace['eof'] = True
+                self.buffer.clear()
+                return b''
             except BaseException as error:
                 trace['error'] = self.error_code(error)
                 raise

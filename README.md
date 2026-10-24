@@ -13,16 +13,29 @@
 - 🏟️ 上海五所高校、七个校区的操场预设，附地图与来源说明；上财武东路线为用户四点生成的估算轨迹。
 - 🎨 路线可以自己绘制，也可以导入 GPX／GeoJSON。
 - ⏱️ 配速从 **2:00／公里** 起步，慢速没有人为上限，目标距离自行设置。
+- 🌊 可选配速波动与轨迹横向偏移，幅度自行设置，默认关闭。
 - 🎛️ 开始、暂停、继续、中止、恢复定位，全部收进一个数字菜单。
 - 💾 自动收藏自定义路线并分配数字编号，记住路线、配速和目标距离；运行进度保存在内存中。
 
 CampusRoute 使用 Android 标准模拟位置接口或 iPhone 开发者定位接口播放路线，可用于地图、路线和位置功能的调试。默认目标为5公里，默认配速为2:00／公里。
 
+## Python 版本与平台支持
+
+**最低要求：Python 3.11（`>=3.11`）**。安装配置与启动器均不设置 Python 版本上限。GitHub Actions 在 macOS 和 Windows 上分别运行 **3.11、3.12、3.13、3.14、3.15** 的依赖安装、测试与环境检查；各版本是否已经验证通过，请查看[对应提交的检查结果](https://github.com/ArtemisJLV/CampusRoute/actions/workflows/test.yml)。尚未通过检查的版本不列为已验证版本。
+
+| 使用组合 | 启动入口 | 验证情况 |
+| --- | --- | --- |
+| macOS + iPhone | `CampusRoute.command` | Apple Silicon Mac 已完成手机操作验证；Intel Mac 尚未验证 |
+| Windows + iPhone | `CampusRoute.bat` | 已提供设备连接、开发者镜像准备与路线控制，完整手机操作仍需真机验收 |
+| Windows + Android 10+ | `CampusRoute.cmd` | 已提供 ADB 连接与配套接收应用，完整手机操作及厂商兼容性仍需真机验收 |
+
+自动检查验证程序、依赖与启动流程。手机系统、驱动、开发者服务以及目标应用的定位行为需要结合真实设备确认。较新 Python 版本的可用性也取决于第三方依赖的支持情况。
+
 ## Windows + Android 开始使用
 
-Windows 支持 Python **3.11—3.13**，Android 配套 APK 最低支持 Android 10。Android 稳定性尚待完整真机验收，兼容性与验收项目见 [Android说明](docs/android.md)。
+Windows 需要 Python **3.11 或更新版本**，Android 配套 APK 最低支持 Android 10。兼容性与验收项目见 [Android说明](docs/android.md)。
 
-1. 准备 Python 3.11—3.13 和 Android SDK Platform-Tools，确保 `adb` 在 PATH 中；手机开启 USB 调试，解锁后允许电脑调试。
+1. 准备 Python 3.11 或更新版本和 Android SDK Platform-Tools，确保 `adb` 在 PATH 中；手机开启 USB 调试，解锁后允许电脑调试。
 2. 双击 **`CampusRoute.cmd`**，创建或使用项目内 `.venv` 环境。需要指定解释器时，在 PowerShell 中执行 `./CampusRoute.ps1 -Python 'Python完整路径'`。
 3. 选择菜单 **10** 安装 `build/android/CampusRoute-debug.apk`。源码没有预置APK时，先按下方说明构建。
 4. **7 → 选择路线，8 → 设置参数，1 → 连接手机**。连接时会打开手机端；在开发者选项中选择 CampusRoute 为模拟位置应用，允许定位权限并点击 **启动接收**。
@@ -45,7 +58,7 @@ Android位置更新通过USB上的持续连接传输并要求回执。断线或�
 | 电脑 | macOS（已验证 Apple Silicon；Intel Mac 尚未验证）或 Windows 10/11 64 位 |
 | iPhone | iOS 17.4 或更新版本，开启开发者模式 |
 | 数据线 | 支持数据传输；手机解锁并信任电脑。macOS 用 Finder 识别，Windows 需安装 Apple 设备支持（iTunes 或“Apple 设备”应用） |
-| Python 环境 | macOS 使用 Miniconda 创建独立 Python 3.11 环境；Windows 使用 Python 3.11—3.13，启动器会创建 `.venv` |
+| Python 环境 | 最低 Python 3.11；macOS 使用 Miniconda 创建独立环境，Windows 启动器创建 `.venv` |
 | 网络 | 首次安装依赖、准备开发者镜像和加载地图底图时需要联网 |
 | 开发者镜像 | 由 pymobiledevice3 准备，须与手机系统版本兼容；macOS 可使用现有 Xcode 安装 |
 
@@ -95,7 +108,7 @@ python -m venv .venv
 
 启动器同时核对已安装发行包版本、程序版本和当前源码版本，并检查所选设备后端的依赖。版本不一致时，macOS 显示 **`1` 安装／升级／修复环境** 和 **`0` 退出**；Windows 自动更新独立环境，检查通过后才会启动程序。
 
-macOS 首次安装会创建独立 Conda 环境；已有环境会在原位置补齐程序和依赖。Windows 使用 Python 3.11—3.13 创建 `.venv`，根据所选后端安装当前项目。安装完成后会再次校验，通过后进入控制台。
+macOS 首次安装会创建 Python 3.11 或更新版本的独立 Conda 环境；已有环境会在原位置补齐程序和依赖。Windows 使用指定的 Python 3.11 或更新版本创建 `.venv`，根据所选后端安装当前项目。安装完成后会再次校验，通过后进入控制台。
 
 下载失败或安装中断时，请根据终端错误检查网络和 Python 环境，再次双击启动文件并选择1继续。macOS 也可以进入项目文件夹，在 Terminal 中手动修复已有环境：
 
@@ -218,6 +231,11 @@ GeoJSON 示例：
 
 代码采用 **GPL-3.0-or-later**，完整条款见 [LICENSE](LICENSE)。路线数据采用 **ODbL-1.0**，Leaflet 地图组件保留 **BSD-2-Clause** 原许可。
 
+感谢两位贡献者参与完善 CampusRoute：
+
+- [@738NGX](https://github.com/738NGX)：贡献 Windows 与 Android 支持、Android 配套应用、配速和轨迹波动、四点生成跑道、路线距离显示及用户配置保存，详见 [PR #1](https://github.com/ArtemisJLV/CampusRoute/pull/1)。
+- [@windfall-gif](https://github.com/windfall-gif)：贡献 Windows + iPhone 启动与连接支持，以及开发者镜像准备流程，详见 [PR #2](https://github.com/ArtemisJLV/CampusRoute/pull/2)。
+
 感谢 [pymobiledevice3](https://github.com/doronz88/pymobiledevice3)、[gpxpy](https://github.com/tkrajina/gpxpy)、[GeographicLib](https://github.com/geographiclib/geographiclib-python)、[geojson](https://github.com/jazzband/geojson)、[Leaflet](https://leafletjs.com/) 和 [OpenStreetMap contributors](https://www.openstreetmap.org/copyright)。版本、用途、许可及场馆资料详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 学校名称用于标识公开场馆。使用开发者定位接口时，应遵守目标应用的使用规则；应用自身决定轨迹显示、距离计算与记录有效性。
@@ -234,4 +252,4 @@ python -m twine check dist/*
 python tools/check_distribution.py
 ```
 
-GitHub Actions 在推送、Pull Request 和手动运行时检查 Windows／macOS 的 Python 3.11—3.13、源码规范、全部测试、依赖、JavaScript 语法、发行包与 Android APK 构建。构建产物保留7天，可在 Actions 页面下载；正式版本下载见 Releases。
+GitHub Actions 在推送、Pull Request 和手动运行时检查 Windows／macOS 的 Python 3.11—3.15、源码规范、全部测试、依赖、JavaScript 语法与启动器，另外构建并检查 Python 发行包和 Android APK，共12项检查。构建产物保留7天，可在 Actions 页面下载；正式版本下载见 Releases。

@@ -17,8 +17,8 @@ $env:PYTHONDONTWRITEBYTECODE = '1'
 $env:PYTHONUTF8 = '1'
 $taskPython = Join-Path $taskRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $taskPython)) {
-    & $Python -c 'import sys; assert (3,11) <= sys.version_info[:2] < (3,14), "Python 3.11-3.13 required"'
-    if ($LASTEXITCODE -ne 0) { throw '请选择 Python 3.11、3.12 或3.13，或使用 -Python 指定解释器路径。' }
+    & $Python -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else "Python >=3.11 required")'
+    if ($LASTEXITCODE -ne 0) { throw '请选择 Python 3.11 或更新版本，或使用 -Python 指定解释器路径。' }
     & $Python -m venv (Join-Path $taskRoot '.venv')
     if ($LASTEXITCODE -ne 0) { throw '虚拟环境创建失败。' }
     $Repair = $true

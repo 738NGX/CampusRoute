@@ -7,7 +7,7 @@ name = "campusroute"
 version = "1.2.0"
 description = "Windows / Android、Windows / iPhone 与 macOS / iPhone 路线与定位调试工具"
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md", "LICENSES/*"]
 dependencies = [
