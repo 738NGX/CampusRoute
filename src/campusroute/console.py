@@ -189,12 +189,14 @@ class ConsoleApp:
 
     async def run(self):
         loop = asyncio.get_running_loop()
-        descriptor = sys.stdin.fileno()
+        descriptor = None if sys.platform == 'win32' else sys.stdin.fileno()
+        reader_task = None
 
         def receive():
             line = sys.stdin.readline()
             if line == '':
-                loop.remove_reader(descriptor)
+                if descriptor is not None:
+                    loop.remove_reader(descriptor)
                 request_exit()
             else:
                 self.commands.put_nowait(line.strip())
@@ -203,9 +205,25 @@ class ConsoleApp:
             self.closing = True
             self.commands.put_nowait('0')
 
-        loop.add_reader(descriptor, receive)
-        for event in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
-            loop.add_signal_handler(event, request_exit)
+        if descriptor is None:
+            def receive_forever():
+                while not self.closing:
+                    line = sys.stdin.readline()
+                    if line == '':
+                        loop.call_soon_threadsafe(request_exit)
+                        return
+                    loop.call_soon_threadsafe(self.commands.put_nowait, line.strip())
+
+            reader_task = asyncio.create_task(asyncio.to_thread(receive_forever))
+        else:
+            loop.add_reader(descriptor, receive)
+        for event in (signal.SIGINT, signal.SIGTERM, getattr(signal, 'SIGHUP', None), getattr(signal, 'SIGBREAK', None)):
+            if event is None:
+                continue
+            try:
+                loop.add_signal_handler(event, request_exit)
+            except NotImplementedError:
+                signal.signal(event, lambda signum, frame: request_exit())
         pending = asyncio.create_task(self.commands.get())
         self.show_menu()
         try:
@@ -229,7 +247,10 @@ class ConsoleApp:
                     pending = asyncio.create_task(self.commands.get())
         finally:
             pending.cancel()
-            loop.remove_reader(descriptor)
+            if reader_task is not None:
+                reader_task.cancel()
+            elif descriptor is not None:
+                loop.remove_reader(descriptor)
             try:
                 had_connection = bool(self.connection and self.connection.simulated)
                 await self.restore()
@@ -244,8 +265,8 @@ def main():
     parser.add_argument('--version', action='version', version=__version__)
     parser.add_argument('--root', type=Path, default=Path.cwd(), help='本地工作文件夹')
     args = parser.parse_args()
-    if sys.platform != 'darwin':
-        parser.error('设备控制窗口需要在 macOS 上运行。')
+    if sys.platform not in ('darwin', 'win32'):
+        parser.error('设备控制窗口需要在 macOS 或 Windows 上运行。')
     logging.basicConfig(level=logging.WARNING, force=True)
     try:
         with runtime(args.root):

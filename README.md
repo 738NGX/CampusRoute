@@ -4,7 +4,7 @@
 
 把操场装进数字菜单：选择路线、设置配速、准备起点，然后用几个数字控制一段旅程。
 
-软件名称：**CampusRoute** · 平台：**macOS + iPhone** · 代码许可：**GPL-3.0-or-later**
+软件名称：**CampusRoute** · 平台：**macOS 或 Windows + iPhone** · 代码许可：**GPL-3.0-or-later**
 
 **📦 [下载最新版本](https://github.com/ArtemisJLV/CampusRoute/releases/latest)** · [查看版本更新记录](https://github.com/ArtemisJLV/CampusRoute/releases)
 
@@ -22,19 +22,19 @@ CampusRoute 使用 iPhone 开发者定位接口播放路线，可用于地图、
 
 | 装备 | 要求 |
 | --- | --- |
-| Mac | macOS，已验证 Apple Silicon；Intel Mac 尚未验证 |
+| 电脑 | macOS（已验证 Apple Silicon；Intel Mac 尚未验证）或 Windows 10/11 64 位 |
 | iPhone | iOS 17.4 或更新版本，开启开发者模式 |
-| 数据线 | 支持数据传输；手机解锁并信任电脑，Finder 能识别设备 |
-| Miniconda | 用于创建独立的 Python 3.13 环境 |
+| 数据线 | 支持数据传输；手机解锁并信任电脑。macOS 用 Finder 识别，Windows 需安装 Apple 设备支持（iTunes 或“Apple 设备”应用） |
+| Python 环境 | macOS 使用 Miniconda；Windows 使用 Python 3.13，启动器会创建 `.venv` |
 | 网络 | 首次安装依赖、准备开发者镜像和加载地图底图时需要联网 |
-| 开发者镜像 | 由 pymobiledevice3 准备，须与手机系统版本兼容；可使用现有 Xcode 安装 |
+| 开发者镜像 | 由 pymobiledevice3 准备，须与手机系统版本兼容；macOS 可使用现有 Xcode 安装 |
 
 手机开发者模式入口：**设置 → 隐私与安全性 → 开发者模式**。开启后按照系统提示重启并确认。系统升级可能影响开发者服务兼容性。
 
 ## 三步进入控制台
 
 1. 从[最新版本发布页](https://github.com/ArtemisJLV/CampusRoute/releases/latest)的 **Assets** 下载 CampusRoute 压缩包，解压到一个固定文件夹。
-2. 双击 **`CampusRoute.command`**，首次选择数字 **`1`** 安装独立环境。
+2. macOS 双击 **`CampusRoute.command`**，Windows 双击 **`CampusRoute.bat`**。首次选择数字 **`1`** 安装独立环境。
 3. 连接并解锁 iPhone，开始选择路线和参数。
 
 终端打开后，会显示：
@@ -44,7 +44,7 @@ CampusRoute  |  iPhone 路线调试
 在家里我们就练起来
 ```
 
-偏爱 Terminal 的朋友，也可以进入项目文件夹后执行：
+macOS 也可以进入项目文件夹后执行：
 
 ```sh
 mkdir -p work/.cache/tmp
@@ -54,19 +54,29 @@ chmod +x CampusRoute.command
 ./CampusRoute.command
 ```
 
-Miniconda 需要已经在 Terminal 中启用。安装完成后，日常只需双击启动文件。环境位于 `.conda/campusroute`；更换项目文件夹位置后需要重新创建环境。
+Miniconda 需要已经在 Terminal 中启用。安装完成后，日常只需双击启动文件。macOS 环境位于 `.conda/campusroute`；Windows 环境位于 `.venv`。更换项目文件夹位置后需要重新创建环境。
+
+Windows 手动安装：
+
+```bat
+py -3.13 -m venv .venv
+.venv\Scripts\python -m pip install -e .
+.venv\Scripts\python -m campusroute --root .
+```
 
 ### 安装与修复
 
-每次启动都会检查程序能否导入、项目安装信息是否存在，以及依赖版本和依赖关系是否满足安装声明。需要准备环境时，窗口显示 **`1` 安装／修复环境** 和 **`0` 退出**。
+macOS 每次启动都会检查程序能否导入、项目安装信息是否存在，以及依赖版本和依赖关系是否满足安装声明。需要准备环境时，窗口显示 **`1` 安装／修复环境** 和 **`0` 退出**。Windows 启动器检查程序能否导入，不完整时同样显示这两个选项。
 
-选择1后，首次安装会创建独立环境；已有 Conda 环境会在原位置补齐程序和依赖。安装完成后会再次校验，通过后进入控制台。
+选择1后，macOS 首次安装会创建独立 Conda 环境；已有环境会在原位置补齐程序和依赖。Windows 会用 Python 3.13 创建 `.venv` 并安装当前项目。安装完成后会再次校验，通过后进入控制台。
 
-下载失败或安装中断时，请根据终端错误检查网络和 Miniconda 配置，再次双击启动文件并选择1继续。也可以进入项目文件夹，在 Terminal 中手动修复已有环境：
+下载失败或安装中断时，请根据终端错误检查网络和 Python 环境，再次双击启动文件并选择1继续。macOS 也可以进入项目文件夹，在 Terminal 中手动修复已有环境：
 
 ```sh
 conda env update --prefix ./.conda/campusroute --file environment.yml
 ```
+
+Windows 依赖不完整时，删除项目内的 `.venv` 后重新双击 `CampusRoute.bat` 并选择1。
 
 ## 数字遥控器 🎛️
 
@@ -142,7 +152,7 @@ GeoJSON 示例：
 
 ## 关于本地记录 🫧
 
-程序自身不创建运行日志、状态文件、操作历史或自动路线副本。设备标识、移动进度与参数保存在进程内存中；错误信息直接显示在当前终端。多窗口互斥使用目录锁，不生成锁文件。
+程序自身不创建运行日志、状态文件、操作历史或自动路线副本。设备标识、移动进度与参数保存在进程内存中；错误信息直接显示在当前终端。macOS 用目录锁避免多个窗口同时运行。Windows 使用 `work/.campusroute.lock` 做同样的互斥，这个文件只用于锁定，不记录路线或操作。
 
 运行所需的临时目录位于项目内 `work/.cache/`，退出时清理。主动下载的路线文件由用户保存；Miniconda 环境、设备配对资料和开发者镜像供后续连接使用。
 

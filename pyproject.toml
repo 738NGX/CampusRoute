@@ -11,7 +11,7 @@ requires-python = ">=3.13,<3.14"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md", "LICENSES/*"]
 dependencies = [
-  "pymobiledevice3==11.36.0",
+  "pymobiledevice3>=11.36.0,<12",
   "gpxpy==1.6.2",
   "geographiclib==2.1",
   "geojson==3.2.0",
