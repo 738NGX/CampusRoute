@@ -6,6 +6,8 @@
 
 软件名称：**CampusRoute** · 平台：**macOS + iPhone** · 代码许可：**GPL-3.0-or-later**
 
+**📦 [下载最新版本](https://github.com/ArtemisJLV/CampusRoute/releases/latest)** · [查看版本更新记录](https://github.com/ArtemisJLV/CampusRoute/releases)
+
 ## 先认识一下这位选手
 
 - 🏟️ 上海四所985高校、六个校区的操场预设，附地图与数据来源。
@@ -31,7 +33,7 @@ CampusRoute 使用 iPhone 开发者定位接口播放路线，可用于地图、
 
 ## 三步进入控制台
 
-1. 下载源码，解压到一个固定文件夹。
+1. 从[最新版本发布页](https://github.com/ArtemisJLV/CampusRoute/releases/latest)的 **Assets** 下载 CampusRoute 压缩包，解压到一个固定文件夹。
 2. 双击 **`CampusRoute.command`**，首次选择数字 **`1`** 安装独立环境。
 3. 连接并解锁 iPhone，开始选择路线和参数。
 
