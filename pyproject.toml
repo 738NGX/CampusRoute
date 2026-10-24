@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "campusroute"
-version = "1.1.0"
+version = "1.2.0"
 description = "Windows / Android、Windows / iPhone 与 macOS / iPhone 路线与定位调试工具"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
@@ -18,6 +18,13 @@ dependencies = [
 
 [project.optional-dependencies]
 ios = ["pymobiledevice3==11.36.0", "packaging==26.3"]
+dev = ["build>=1.2", "twine>=6", "ruff>=0.11"]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82", "F401"]
 
 [project.scripts]
 campusroute = "campusroute.console:main"

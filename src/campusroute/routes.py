@@ -124,7 +124,6 @@ def presets() -> list[Route]:
 
 
 def pending_venues() -> list[dict]:
-    """Venue facts without verified geometry are never returned as playable routes."""
     directory = files('campusroute').joinpath('data', 'pending')
     if not directory.is_dir():
         return []

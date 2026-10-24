@@ -33,7 +33,7 @@ public final class MainActivity extends Activity {
         layout.setOrientation(LinearLayout.VERTICAL);
         int padding = (int) (24 * getResources().getDisplayMetrics().density);
         layout.setPadding(padding, padding, padding, padding);
-        // Android 15+ enforces edge-to-edge for targetSdk 35; keep controls below system bars.
+        // Android 15 及更新版本采用边缘布局，控件需要避开系统栏。
         layout.setOnApplyWindowInsetsListener((view, insets) -> {
             view.setPadding(padding + insets.getSystemWindowInsetLeft(), padding + insets.getSystemWindowInsetTop(),
                 padding + insets.getSystemWindowInsetRight(), padding + insets.getSystemWindowInsetBottom());

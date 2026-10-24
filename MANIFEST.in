@@ -1,5 +1,5 @@
 include CampusRoute.command CampusRoute.cmd CampusRoute.bat CampusRoute.ps1 environment.yml
-recursive-include android *.java *.xml *.gradle *.md
+recursive-include android *.java *.xml *.gradle
 recursive-include tools *.py
 recursive-include tests *.py
 recursive-include docs *.md

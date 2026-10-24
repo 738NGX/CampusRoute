@@ -3,11 +3,11 @@ from pathlib import Path
 
 
 class InstallationError(RuntimeError):
-    """An APK installation failed before any location session was opened."""
+    pass
 
 
 class SessionError(RuntimeError):
-    """A device session failed; the console can discard it and accept a new one."""
+    pass
 
 
 @dataclass(frozen=True)

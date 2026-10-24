@@ -1,4 +1,3 @@
-"""Estimate a stadium-shaped track around four football-pitch corners in WGS84."""
 import math
 
 from geographiclib.geodesic import Geodesic
@@ -45,7 +44,7 @@ def generate_track(corners, clearance_m=2, end_inset_m=10):
         raise ValueError('请选择四个不同的足球场角点。')
     clearance = parameter(clearance_m, '最小间距', 0, 30)
     inset = parameter(end_inset_m, '弯道内收', 0, 50)
-    # Unwrap longitudes around the first point, including sites near the date line.
+    # 围绕首个角点展开经度，支持跨越日期变更线的场地。
     reference = corners[0][0]
     longitude = sum(reference + (point[0] - reference + 180) % 360 - 180 for point in corners) / 4
     latitude = sum(point[1] for point in corners) / 4
@@ -92,7 +91,7 @@ def generate_track(corners, clearance_m=2, end_inset_m=10):
         raise ValueError('弯道内收过大，请减小数值；直道长度至少需要10米。')
     middle_x, middle_y = (low_x + high_x) / 2, (low_y + high_y) / 2
     half_straight = field_length / 2 - inset
-    # The pitch corners must fit inside the semicircles, not just between the straights.
+    # 半圆需要包围足球场角点，并保留指定间距。
     radius = math.hypot(field_width / 2, inset) + clearance
     arc_steps = max(24, math.ceil(math.pi * radius / 2))
     straight_steps = max(1, math.ceil(half_straight))

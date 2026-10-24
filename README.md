@@ -14,7 +14,7 @@
 - 🎨 路线可以自己绘制，也可以导入 GPX／GeoJSON。
 - ⏱️ 配速从 **2:00／公里** 起步，慢速没有人为上限，目标距离自行设置。
 - 🎛️ 开始、暂停、继续、中止、恢复定位，全部收进一个数字菜单。
-- 💾 自动记住上次的路线、配速和目标距离；运行进度保存在内存中。
+- 💾 自动收藏自定义路线并分配数字编号，记住路线、配速和目标距离；运行进度保存在内存中。
 
 CampusRoute 使用 Android 标准模拟位置接口或 iPhone 开发者定位接口播放路线，可用于地图、路线和位置功能的调试。默认目标为5公里，默认配速为2:00／公里。
 
@@ -34,7 +34,7 @@ APK可以使用Android Studio打开 `android/` 构建，也可以在已安装JDK
 python tools/build_android.py --sdk 'Android SDK路径' --java-home 'JDK路径'
 ```
 
-需要指定ADB时使用 `./CampusRoute.ps1 -Adb 'adb.exe完整路径'`；修复环境使用 `-Repair`。也可从 [Google 官方页面](https://developer.android.com/tools/releases/platform-tools)下载 Platform-Tools，解压为项目内 `work/android-sdk/platform-tools/`；程序优先使用此处的ADB，其次查找 PATH 与 Android SDK 环境变量，显式 `-Adb` 始终优先。Android 模式安装通用依赖；iPhone 模式另外安装 `ios` 可选依赖。完整构建步骤、通信行为和荣耀手机验收清单见 [Android说明](docs/android.md)。
+需要指定ADB时使用 `./CampusRoute.ps1 -Adb 'adb.exe完整路径'`；升级或修复环境使用 `-Upgrade`。也可从 [Google 官方页面](https://developer.android.com/tools/releases/platform-tools)下载 Platform-Tools，解压为项目内 `work/android-sdk/platform-tools/`；程序优先使用此处的ADB，其次查找 PATH 与 Android SDK 环境变量，显式 `-Adb` 始终优先。Android 模式安装通用依赖；iPhone 模式另外安装 `ios` 可选依赖。完整构建步骤与故障处理见 [Android说明](docs/android.md)。
 
 Android位置更新通过USB上的持续连接传输并要求回执。断线或连续5秒未收到完整指令后，手机尝试移除模拟位置。系统强制结束、厂商电池管理及定位权限变化仍需实机验证。Android模拟位置带有系统标记，目标应用是否使用这些位置由其自身实现决定。
 
@@ -93,7 +93,7 @@ python -m venv .venv
 
 ### 安装与修复
 
-启动器检查程序能否导入、已安装版本是否与当前源码一致，以及所选设备后端的依赖是否完整。macOS 需要准备环境时显示 **`1` 安装／修复环境** 和 **`0` 退出**；Windows 会自动准备独立环境，失败时显示错误。
+启动器同时核对已安装发行包版本、程序版本和当前源码版本，并检查所选设备后端的依赖。版本不一致时，macOS 显示 **`1` 安装／升级／修复环境** 和 **`0` 退出**；Windows 自动更新独立环境，检查通过后才会启动程序。
 
 macOS 首次安装会创建独立 Conda 环境；已有环境会在原位置补齐程序和依赖。Windows 使用 Python 3.11—3.13 创建 `.venv`，根据所选后端安装当前项目。安装完成后会再次校验，通过后进入控制台。
 
@@ -104,7 +104,13 @@ conda env update --prefix ./.conda/campusroute --file environment.yml
 conda run --prefix ./.conda/campusroute python -m pip install --no-cache-dir -e '.[ios]'
 ```
 
-Windows 可使用 `./CampusRoute.ps1 -Backend ios -Repair` 修复 iPhone 环境；Android 环境使用 `./CampusRoute.ps1 -Repair`。
+主动升级或修复当前源码对应的环境：
+
+```sh
+./CampusRoute.command --upgrade
+```
+
+Windows 使用 `./CampusRoute.ps1 -Backend ios -Upgrade` 升级 iPhone 环境；Android 环境使用 `./CampusRoute.ps1 -Upgrade`。`--repair`／`-Repair` 同样可用。升级入口安装本地项目文件夹内的版本；更新源码可重新下载压缩包或手动拉取 GitHub。
 
 ## 数字遥控器 🎛️
 
@@ -121,6 +127,7 @@ Windows 可使用 `./CampusRoute.ps1 -Backend ios -Repair` 修复 iPhone 环境�
 | **9** | 打开操场地图，绘制自己的路线 |
 | **10** | Android后端：安装或更新配套APK |
 | **11** | 开关及设置配速波动、轨迹横向偏移 |
+| **12** | 设置自定义路线是否默认保存为本地收藏 |
 | **0** | 发送恢复真实定位指令，关闭地图服务并退出 |
 
 推荐操作顺序：**`7` 选择路线 → `8` 设置参数 → `1` 准备起点 → `2` 开始移动**。
@@ -137,7 +144,7 @@ Windows 可使用 `./CampusRoute.ps1 -Backend ios -Repair` 修复 iPhone 环境�
 
 Android 回执超时或无效时，结束本次会话，显示错误和清理结果后返回菜单，保留路线、配速和目标距离。按手机提示停止并恢复后可用菜单1重新连接，新连接等待用户开始移动。
 
-达到目标距离后，程序保持终点位置，等待选择5或0。路线、配速、目标距离与波动设置修改成功后立即保存到项目内 `work/settings.json`，下次启动自动恢复；连接状态和移动进度每次重新开始。首次启动仍使用默认设置。旧配置没有波动字段时默认关闭，其他设置照常恢复。配置损坏时会提示并恢复相应默认值，保存失败时会提示本次设置仅在当前窗口生效。
+达到目标距离后，程序保持终点位置，等待选择5或0。路线选择、配速、目标距离、波动与保存开关写入项目内 `work/settings.json`，下次启动自动恢复；连接状态和移动进度每次重新开始。首次启动使用默认设置。设置文件损坏时停止启动并显示错误，检查或删除该文件后可以重新设置。
 
 Ctrl+C和可处理的正常终止信号会触发设备清理。关闭窗口、强制结束进程或断电可能无法执行电脑端清理。Android接收端会在断线或超时后尝试移除模拟位置；也可点击手机端停止按钮。iPhone可重新连接后执行菜单1、5，必要时重启手机。
 
@@ -164,10 +171,12 @@ OSM预设保留地图对象链接、学校场馆资料、获取日期与许可�
 1. 在菜单 **9** 打开地图，选择附近校区，或输入 `纬度,经度` 移动地图中心。
 2. 默认选择 **四点足球场 → 自动生成跑道**，点击 **选取足球场四角**，沿球场边缘点选四个角；程序自动生成闭合跑道。
 3. 拖动蓝色角点可修正位置；调整 **最小间距** 和 **弯道内收** 可改变跑道大小。也可切换为 **逐点绘制路线**；手动画环形路线时点击 **闭合路线**。
-4. 填写路线名称，点击 **下载 GeoJSON 路线**。
-5. 回到操作窗口，输入 **7 → I**，粘贴下载文件的完整路径。
+4. 填写路线名称，点击 **完成路线**。默认勾选保存，页面会显示新路线编号；需要文件副本时另行点击 **下载 GeoJSON 副本**。
+5. 回到操作窗口，输入 **7 → 对应编号**。保存的路线在下次启动仍然可选；也可以使用 **7 → I** 导入已有 GPX／GeoJSON 文件。
 
-导入的当前路线会随配置保存完整坐标和来源信息，下次启动无需重新导入，原文件移动或删除也不影响恢复。切换路线后配置只保留新选择；如需收藏多条自定义路线，请保留下载的原文件。编辑内置路线后下载的文件会保留来源与数据许可。
+绘制完成和导入的路线默认加入 `user-routes/routes.geojson`，内置路线之后按保存顺序分配数字编号。重复保存相同路线会复用已有选项，切换路线保留全部收藏，原导入文件移动或删除不影响使用。编辑内置路线时保留来源与数据许可。
+
+地图取消勾选 **保存为路线选项，供下次使用**，该路线仅在本次窗口提供编号。终端菜单 **12 → 2** 可以关闭后续导入和地图的默认保存，**12 → 1** 重新开启；已经打开的地图页面需要重新加载以采用新的默认值。关闭保存开关会保留现有收藏。手动下载的 GeoJSON 文件由用户管理。
 
 地图右上角与侧栏实时显示当前轨迹总距离，闭合路线为单圈长度，开放路线为单程长度。四点选择、角点拖动、参数调整和手动编辑后会重新计算，距离与播放模块同样采用 WGS84 椭球计算。
 
@@ -199,7 +208,7 @@ GeoJSON 示例：
 
 ## 关于本地记录 🫧
 
-程序在 `work/settings.json` 保存当前路线、配速和目标距离；自定义路线包含坐标和来源信息，内置路线保存预设标识。删除此文件即可恢复默认设置。该文件不提交到版本库，也不随临时目录清理。设备标识、移动进度和会话令牌只保存在进程内存中；程序不保存运行日志或操作历史，错误信息直接显示在当前终端。macOS使用目录锁，Windows使用命名互斥量，不生成锁文件。Android接收端的会话和坐标保存在内存中，不自动恢复或重播旧轨迹。
+程序在 `work/settings.json` 保存路线选择、配速、目标距离、波动与保存开关，在 `user-routes/routes.geojson` 保存收藏路线的坐标和来源。关闭自动保存后，临时路线留在当前窗口内存中，不写入设置文件。删除设置文件恢复默认参数；删除路线收藏前，请先切换到内置路线。两个目录都不提交到版本库。设备标识、移动进度和会话令牌只保存在进程内存中；程序不保存运行日志或操作历史，错误信息直接显示在当前终端。macOS使用目录锁，Windows使用命名互斥量，不生成锁文件。Android接收端的会话和坐标保存在内存中，不自动恢复或重播旧轨迹。
 
 运行所需的临时目录位于项目内 `work/.cache/`，正常退出时清理本次运行子目录。主动下载的路线文件由用户保存；Python环境、Android构建产物和调试密钥、Apple设备配对资料和开发者镜像供后续使用。ADB和操作系统自行管理其缓存和记录。
 
@@ -212,3 +221,17 @@ GeoJSON 示例：
 感谢 [pymobiledevice3](https://github.com/doronz88/pymobiledevice3)、[gpxpy](https://github.com/tkrajina/gpxpy)、[GeographicLib](https://github.com/geographiclib/geographiclib-python)、[geojson](https://github.com/jazzband/geojson)、[Leaflet](https://leafletjs.com/) 和 [OpenStreetMap contributors](https://www.openstreetmap.org/copyright)。版本、用途、许可及场馆资料详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 学校名称用于标识公开场馆。使用开发者定位接口时，应遵守目标应用的使用规则；应用自身决定轨迹显示、距离计算与记录有效性。
+
+## 一起开发 🔧
+
+```sh
+python -m pip install -e '.[dev,ios]'
+python -m unittest discover -s tests -v
+python -m ruff check src tools tests
+python tools/check_source.py
+python -m build
+python -m twine check dist/*
+python tools/check_distribution.py
+```
+
+GitHub Actions 在推送、Pull Request 和手动运行时检查 Windows／macOS 的 Python 3.11—3.13、源码规范、全部测试、依赖、JavaScript 语法、发行包与 Android APK 构建。构建产物保留7天，可在 Actions 页面下载；正式版本下载见 Releases。

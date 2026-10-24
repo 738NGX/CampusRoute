@@ -5,13 +5,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from urllib.parse import urlsplit
 
+import geojson
+
+from campusroute.routes import route_from_feature
 from campusroute.track import generate_track, route_length
 
 
 class MapServer:
-    def __init__(self, routes):
+    def __init__(self, routes, library=None, save_custom_routes=True):
         assets = files('campusroute').joinpath('web')
-        self.update_routes(routes)
+        self.routes = routes
+        self.library = library
+        self.save_custom_routes = save_custom_routes
         resources = {}
 
         def collect(directory, prefix=''):
@@ -28,10 +33,12 @@ class MapServer:
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
                 path = urlsplit(self.path).path
-                if path not in ('/generate-track', '/route-length'):
+                if path not in ('/generate-track', '/route-length', '/save-route'):
                     self.send_error(404)
                     return
                 try:
+                    if self.headers.get('Origin') not in (None, owner.url.rstrip('/')):
+                        raise ValueError('请从当前程序打开的地图页面保存路线。')
                     if self.headers.get_content_type() != 'application/json':
                         raise ValueError('请发送 JSON 数据。')
                     length = int(self.headers.get('Content-Length', '0'))
@@ -44,13 +51,22 @@ class MapServer:
                     if path == '/generate-track':
                         result = generate_track(data.get('corners'), data.get('clearance_m', 2),
                                                 data.get('end_inset_m', 10))
-                    else:
+                    elif path == '/route-length':
                         result = {'length_m': round(route_length(data.get('coordinates')), 3)}
+                    else:
+                        if owner.library is None:
+                            raise ValueError('当前地图未启用路线收藏。')
+                        route = route_from_feature(geojson.loads(json.dumps(data.get('feature'))))
+                        route = owner.library.save(route, persist=data.get('save', owner.save_custom_routes))
+                        result = {'number': owner.routes().index(route) + 1,
+                                  'saved': not route.properties.get('session_only', False)}
                     code = 200
                 except (ValueError, TypeError, UnicodeDecodeError) as error:
                     code, result = 400, {'error': str(error)}
-                except (TimeoutError, OSError):
+                except TimeoutError:
                     code, result = 408, {'error': '请求读取超时或连接中断。'}
+                except OSError as error:
+                    code, result = 500, {'error': f'路线保存失败：{error}'}
                 body = json.dumps(result, ensure_ascii=False, allow_nan=False).encode('utf-8')
                 self.send_response(code)
                 self.send_header('Content-Type', 'application/json; charset=utf-8')
@@ -63,7 +79,10 @@ class MapServer:
             def do_GET(self):
                 path = urlsplit(self.path).path
                 if path == '/routes.json':
-                    body, content_type = owner.payload, 'application/json; charset=utf-8'
+                    body = json.dumps({'type': 'FeatureCollection',
+                                       'features': [route.feature() for route in owner.routes()],
+                                       'save_custom_routes': owner.save_custom_routes}, ensure_ascii=False).encode('utf-8')
+                    content_type = 'application/json; charset=utf-8'
                 else:
                     path = '/index.html' if path == '/' else path
                     if path not in resources:
@@ -93,12 +112,6 @@ class MapServer:
         self.thread = threading.Thread(target=self.http.serve_forever, daemon=True)
         self.thread.start()
         self.url = f'http://127.0.0.1:{self.http.server_port}/'
-
-    def update_routes(self, routes):
-        self.payload = json.dumps(
-            {'type': 'FeatureCollection', 'features': [route.feature() for route in routes]},
-            ensure_ascii=False,
-        ).encode('utf-8')
 
     def close(self):
         self.http.shutdown()

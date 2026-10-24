@@ -13,6 +13,7 @@ from pathlib import Path
 
 from campusroute import __version__
 from campusroute.backends import InstallationError, SessionError, get_backend
+from campusroute.library import RouteLibrary
 from campusroute.mapserver import MapServer
 from campusroute.motion import Motion, pace_label, parse_pace
 from campusroute.routes import RoutePath, pending_venues, presets, read_route
@@ -30,13 +31,20 @@ class ConsoleApp:
     def __init__(self, root: Path, backend='android', adb=None):
         self.root = root
         self.backend = get_backend(backend, adb, root)
-        self.routes = presets()
+        self.builtin_routes = presets()
+        self.route_library = RouteLibrary(root)
+        self.routes = self.builtin_routes + self.route_library.available()
         self.settings_store = SettingsStore(root)
-        settings, self.settings_message = self.settings_store.load(self.routes)
+        settings = self.settings_store.load(self.routes)
         self.route = settings.route
         self.pace_s = settings.pace_s
         self.target_m = settings.target_m
         self.variation = settings.variation
+        self.save_custom_routes = settings.save_custom_routes
+        if self.route not in self.routes and self.save_custom_routes:
+            self.route = self.route_library.save(self.route)
+            self.routes = self.builtin_routes + self.route_library.available()
+            self.save_settings()
         self.connection = None
         self.motion = None
         self.commands = asyncio.Queue()
@@ -46,11 +54,22 @@ class ConsoleApp:
         self.last_status_refresh = 0
 
     def save_settings(self):
-        try:
-            self.settings_store.save(Settings(self.route, self.pace_s, self.target_m, self.variation), self.routes)
-        except (OSError, ValueError) as error:
-            return f'\n本次设置已生效，但无法保存供下次启动使用：{error}'
-        return ''
+        self.refresh_routes()
+        self.settings_store.save(Settings(self.route, self.pace_s, self.target_m, self.variation,
+                                          self.save_custom_routes), self.routes)
+
+    def refresh_routes(self):
+        self.routes = self.builtin_routes + self.route_library.available()
+        local_id = self.route.properties.get('local_id')
+        if local_id:
+            matches = [item for item in self.routes if item.properties.get('local_id') == local_id]
+            if not matches:
+                raise ValueError('当前路线已从收藏中移除，请重新选择路线。')
+            self.route = matches[0]
+
+    def available_routes(self):
+        routes = self.builtin_routes + self.route_library.available()
+        return routes + ([self.route] if self.route not in routes and not self.route.properties.get('local_id') else [])
 
     def show_menu(self, message=''):
         if sys.stdout.isatty():
@@ -77,12 +96,13 @@ class ConsoleApp:
         if hasattr(self.backend, 'install'):
             print('10 安装／更新 Android 配套 APK')
         print(f'11 设置配速／轨迹波动（{self.variation.label}）')
+        print(f'12 自定义路线自动保存（{"开启" if self.save_custom_routes else "关闭"}）')
         print('0  恢复真实定位并退出')
         print('\n请选择数字并按回车：', end='', flush=True)
 
     @staticmethod
     def terminal_line(line):
-        # Keep each dashboard entry on one row, including Chinese and long route names.
+        # 按显示宽度截断状态行，避免长名称挤占菜单。
         available = max(1, shutil.get_terminal_size().columns - 1)
         output, width = [], 0
         for char in line:
@@ -115,7 +135,7 @@ class ConsoleApp:
         now = time.monotonic()
         if not sys.stdout.isatty() or not self.status_panel_visible or now - self.last_status_refresh < 1:
             return
-        # Update the dashboard while preserving any partially typed command.
+        # 更新状态区域时保留用户正在输入的内容。
         panel = ''.join(f'\033[{row};1H\033[2K' + self.terminal_line(line)
                         for row, line in enumerate(self.status_lines(), 5))
         print('\033[s' + panel + '\033[u', end='', flush=True)
@@ -123,7 +143,11 @@ class ConsoleApp:
 
     async def answer(self, prompt):
         print(prompt, end='', flush=True)
-        return await self.commands.get()
+        reply = await self.commands.get()
+        if reply is None:
+            self.closing = True
+            raise asyncio.CancelledError
+        return reply
 
     async def select_device(self):
         devices = await self.backend.devices()
@@ -160,7 +184,6 @@ class ConsoleApp:
             await connection.close()
 
     async def end_failed_session(self, error):
-        """Discard a broken session without discarding the console or its settings."""
         state = '\n' + '\n'.join(self.status_lines()) if self.motion else ''
         message = f'本次连接已中断：{type(error).__name__}：{error}' + state
         try:
@@ -172,13 +195,15 @@ class ConsoleApp:
         return message
 
     async def select_route(self):
-        print('\n内置操场路线：')
+        self.refresh_routes()
+        print('\n可选路线（内置操场与本地收藏）：')
         for index, route in enumerate(self.routes, 1):
             print(f'{index}  {route.name}')
         print('I  导入 GPX／GeoJSON；输入0返回菜单。')
         for venue in pending_venues():
             print(f'待补充：{venue["name"]}（跑道坐标待核验，暂不可播放）。')
-        print('自定义方法：菜单9打开地图 → 逐点绘制 → 下载路线 → 在这里导入下载文件。')
+        print('自定义方法：菜单9打开地图 → 完成绘制并保存 → 回到这里按编号选择。')
+        print('导入路线默认加入收藏；菜单12可关闭自动保存，仅在本次窗口使用。')
         print('坐标要求：WGS84；GeoJSON 使用 [经度, 纬度]；GPX 需要一条连续路线。')
         print('闭合路线循环前进；开放路线沿原路往返。')
         reply = await self.answer('请选择路线编号或输入 I：')
@@ -190,12 +215,17 @@ class ConsoleApp:
                 return '路线导入已取消。'
             path = Path(raw.strip().strip("\"'")).expanduser()
             route = read_route(path)
-            self.route = route
+            self.route = self.route_library.save(route, persist=self.save_custom_routes)
+            self.routes = self.builtin_routes + self.route_library.available()
         elif reply.isdecimal() and 1 <= int(reply) <= len(self.routes):
             self.route = self.routes[int(reply) - 1]
         else:
             raise ValueError('路线编号无效。')
-        return f'已选择：{self.route.name}。路线全长约{RoutePath(self.route).length_m:.1f}米。' + self.save_settings()
+        number = f'，路线编号{self.routes.index(self.route) + 1}'
+        if self.route.properties.get('session_only'):
+            number += '，仅本次窗口使用'
+        self.save_settings()
+        return f'已选择：{self.route.name}{number}。路线全长约{RoutePath(self.route).length_m:.1f}米。'
 
     async def configure(self):
         print('\n配速格式为 分钟:秒，最快2:00／公里，慢速没有人为上限。')
@@ -210,7 +240,8 @@ class ConsoleApp:
         if not math.isfinite(target_m) or target_m <= 0:
             raise ValueError('目标公里数必须为有限的正数。')
         self.pace_s, self.target_m = pace_s, target_m
-        return '配速与目标距离已设置。' + self.save_settings()
+        self.save_settings()
+        return '配速与目标距离已设置。'
 
     async def configure_variation(self):
         print(f'\n当前波动：{self.variation.label}。配速和偏移缓慢变化，暂停、中止时保持静止。')
@@ -232,7 +263,8 @@ class ConsoleApp:
             self.variation = Variation(True, percent, lateral)
         else:
             raise ValueError('请选择1、2或0。')
-        return f'波动已设置：{self.variation.label}。下次连接生效。' + self.save_settings()
+        self.save_settings()
+        return f'波动已设置：{self.variation.label}。下次连接生效。'
 
     async def choose(self, choice):
         if choice == '0':
@@ -263,7 +295,7 @@ class ConsoleApp:
             print('\n正在安装 APK，请保持手机解锁，并在手机弹窗中确认安装……', flush=True)
             await self.backend.install(device.serial, apk)
             return True, 'APK 已安装。请选择1连接，并在手机完成授权、启动接收。'
-        if choice in ('7', '8', '9', '11'):
+        if choice in ('7', '8', '9', '11', '12'):
             if self.connection:
                 return True, '修改路线或参数前，请选择5恢复定位并断开连接。'
             if choice == '7':
@@ -272,17 +304,25 @@ class ConsoleApp:
                 return True, await self.configure()
             if choice == '11':
                 return True, await self.configure_variation()
-            displayed = list(self.routes)
-            if self.route not in displayed:
-                displayed.append(self.route)
+            if choice == '12':
+                reply = await self.answer('自定义路线自动保存：1 开启；2 关闭；0 取消：')
+                if reply == '0':
+                    return True, '保存设置已取消。'
+                if reply not in ('1', '2'):
+                    raise ValueError('请选择1、2或0。')
+                self.save_custom_routes = reply == '1'
+                if self.map_server:
+                    self.map_server.save_custom_routes = self.save_custom_routes
+                self.save_settings()
+                return True, '自定义路线自动保存已' + ('开启。' if self.save_custom_routes else '关闭，现有收藏继续保留。')
+            self.refresh_routes()
+            displayed = self.available_routes()
             if not self.map_server:
-                self.map_server = MapServer(displayed)
-            else:
-                self.map_server.update_routes(displayed)
+                self.map_server = MapServer(self.available_routes, self.route_library, self.save_custom_routes)
             url = f'{self.map_server.url}?route={displayed.index(self.route)}'
             opened = await asyncio.to_thread(webbrowser.open, url)
             return True, (('地图已打开。' if opened else '请在浏览器打开地图。')
-                          + f'本地地址：{url}\n绘制并下载路线后，输入7，再输入 I 导入文件。')
+                          + f'本地地址：{url}\n完成绘制后默认加入收藏，返回菜单7按编号选择。')
         if choice not in ('2', '3', '4'):
             return True, '请输入菜单中的数字。'
         if not self.motion:
@@ -333,7 +373,7 @@ class ConsoleApp:
                 if input_closed.is_set():
                     return
                 try:
-                    loop.call_soon_threadsafe(self.commands.put_nowait, line.strip() if line else '0')
+                    loop.call_soon_threadsafe(self.commands.put_nowait, line.strip() if line else None)
                 except RuntimeError:
                     return
                 if not line:
@@ -351,13 +391,15 @@ class ConsoleApp:
         pending = asyncio.create_task(self.commands.get())
         try:
             threading.Thread(target=receive, name='campusroute-input', daemon=True).start()
-            self.show_menu(self.settings_message)
+            self.show_menu()
             while True:
-                # Process an already queued stop before sending another moving point.
+                # 优先处理排队的停止指令，再发送下一个位置。
                 if pending.done():
                     choice = pending.result()
+                    if choice is None:
+                        break
                     try:
-                        if choice in ('7', '8', '10', '11') and not self.connection:
+                        if choice in ('7', '8', '10', '11', '12') and not self.connection:
                             try:
                                 keep_running, message = await self.choose(choice)
                             except (ValueError, FileNotFoundError) as error:

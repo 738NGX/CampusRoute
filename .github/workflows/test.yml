@@ -1,31 +1,101 @@
-name: Python compatibility
-on: [push, pull_request]
+name: 检查与构建
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONUTF8: '1'
+  TMPDIR: ${{ github.workspace }}/work/.cache/tmp
+  TEMP: ${{ github.workspace }}/work/.cache/tmp
+  TMP: ${{ github.workspace }}/work/.cache/tmp
 jobs:
   test:
-    runs-on: windows-latest
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
+        os: [windows-latest, macos-latest]
         python: ['3.11', '3.12', '3.13']
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          clean: false
+      - name: 准备缓存目录
+        shell: bash
+        run: mkdir -p work/.cache/tmp
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install -e .
+      - run: python -m pip install -e ".[dev,ios]"
+      - run: python -m ruff check src tools tests
+      - run: python tools/check_source.py
       - run: python -m unittest discover -s tests -v
+      - run: python tools/check_environment.py --backend ios
       - run: python -m pip check
-  android:
+      - run: node --check src/campusroute/web/editor.js
+      - name: 检查 macOS 启动脚本
+        if: runner.os == 'macOS'
+        run: zsh -n CampusRoute.command
+      - name: 验证 Windows 启动器
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: echo 0 | CampusRoute.cmd
+  package:
+    name: Python 发行包
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          clean: false
+      - name: 准备缓存目录
+        run: mkdir -p work/.cache/tmp
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m build
+      - run: python -m twine check dist/*
+      - run: python tools/check_distribution.py
+      - run: python -m pip install --force-reinstall dist/*.whl
+      - run: python tools/check_environment.py --backend android
+      - uses: actions/upload-artifact@v7
+        with:
+          name: CampusRoute-python
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+  android:
+    name: Android 调试 APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          clean: false
+      - name: 准备缓存目录
+        run: mkdir -p work/.cache/tmp
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - run: python3 tools/build_android.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: CampusRoute-debug
           path: build/android/CampusRoute-debug.apk
+          if-no-files-found: error
+          retention-days: 7

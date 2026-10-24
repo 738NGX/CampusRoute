@@ -16,6 +16,7 @@ const distance = document.getElementById('distance');
 const distanceNote = document.getElementById('distance-note');
 const dimensions = document.getElementById('track-dimensions');
 const download = document.getElementById('download');
+const complete = document.getElementById('complete');
 let routes = [];
 let coordinates = [];
 let corners = [];
@@ -41,7 +42,7 @@ function isClosed() {
 function update(message = '') {
   const pitch = method.value === 'pitch';
   customLine.setLatLngs(coordinates.map(([lon, lat]) => [lat, lon]));
-  // Sort only the guide polygon; corner identities stay stable while dragging.
+  // 辅助多边形按环形顺序显示，拖动时保留角点编号。
   const center = corners.reduce((sum, point) => [sum[0] + point[0] / corners.length,
     sum[1] + point[1] / corners.length], [0, 0]);
   const ordered = [...corners].sort((a, b) =>
@@ -83,6 +84,7 @@ function update(message = '') {
     ? '规则跑道估算；闭合轨迹显示单圈长度，松开角点后重新计算。'
     : (isClosed() ? 'WGS84 椭球计算，当前显示单圈长度。' : 'WGS84 椭球计算，开放路线显示单程长度。');
   download.disabled = calculating || lengthM === null || lengthM < 10 || coordinates.length < 2;
+  complete.disabled = download.disabled;
   if (message) {
     status.textContent = message;
   } else if (pitch) {
@@ -253,33 +255,67 @@ document.getElementById('locate').addEventListener('click', () => {
   update('地图中心已更新。选择绘制方式，再开始选点。');
 });
 
-download.addEventListener('click', () => {
+function currentFeature() {
   const name = document.getElementById('name').value.trim();
-  if (calculating || lengthM === null || lengthM < 10) { update('请先完成有效轨迹，总长度至少10米。'); return; }
-  if (coordinates.length < 2 || !name) { update('请填写路线名称，并绘制至少两个不同的坐标点。'); return; }
+  if (calculating || lengthM === null || lengthM < 10) throw new Error('请先完成有效轨迹，总长度至少10米。');
+  if (coordinates.length < 2 || !name) throw new Error('请填写路线名称，并绘制至少两个不同的坐标点。');
   if (coordinates.some((point, index) => index > 0 && point.join(',') === coordinates[index - 1].join(','))) {
-    update('相邻坐标点不能完全相同，请撤销重复坐标。'); return;
+    throw new Error('相邻坐标点不能完全相同，请撤销重复坐标。');
   }
-  const feature = {
+  return {
     type: 'Feature', properties: { ...provenance, name, coordinate_system: 'WGS84', length_m: lengthM },
-    geometry: { type: 'LineString', coordinates },
+    geometry: { type: 'LineString', coordinates: coordinates.map((point) => [...point]) },
   };
-  const blob = new Blob([JSON.stringify(feature, null, 2)], { type: 'application/geo+json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url; link.download = 'custom-route.geojson'; link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  update('路线已下载。返回操作窗口，选择7 → I，粘贴下载文件的完整路径。');
+}
+
+complete.addEventListener('click', async () => {
+  complete.disabled = true;
+  try {
+    const result = await post('save-route', {
+      feature: currentFeature(), save: document.getElementById('save-route').checked,
+    });
+    const current = await fetch('routes.json');
+    if (!current.ok) throw new Error('路线列表读取失败。');
+    fillRoutes((await current.json()).features);
+    update('路线编号' + result.number + (result.saved ? '已保存，可在下次启动继续选择。' : '仅在本次窗口可选。')
+      + '返回操作窗口选择7 → ' + result.number + '。');
+  } catch (error) {
+    update(error.message);
+  } finally {
+    complete.disabled = false;
+  }
 });
+
+download.addEventListener('click', () => {
+  try {
+    const blob = new Blob([JSON.stringify(currentFeature(), null, 2)], { type: 'application/geo+json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = 'custom-route.geojson'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    update('GeoJSON 副本已下载。点击完成路线可将轨迹加入操作窗口的路线列表。');
+  } catch (error) {
+    update(error.message);
+  }
+});
+
+function fillRoutes(features) {
+  routes = features;
+  const previous = selector.value;
+  selector.replaceChildren();
+  routes.forEach((route, index) => {
+    const option = document.createElement('option');
+    option.value = String(index); option.textContent = (index + 1) + '  ' + route.properties.name; selector.append(option);
+  });
+  if (Number(previous) < routes.length) selector.value = previous;
+}
 
 async function initialize() {
   const response = await fetch('routes.json');
   if (!response.ok) throw new Error('操场路线读取失败。');
-  routes = (await response.json()).features;
-  routes.forEach((route, index) => {
-    const option = document.createElement('option');
-    option.value = String(index); option.textContent = route.properties.name; selector.append(option);
-  });
+  const data = await response.json();
+  fillRoutes(data.features);
+  document.getElementById('save-route').checked = data.save_custom_routes;
   const initial = new URLSearchParams(window.location.search).get('route');
   if (initial !== null && /^[0-9]+$/.test(initial) && Number(initial) < routes.length) selector.value = initial;
   selectPreset();

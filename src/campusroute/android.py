@@ -1,4 +1,3 @@
-"""ADB discovery and acknowledged JSON-lines transport to the Android companion."""
 import asyncio
 import json
 import logging
@@ -163,8 +162,7 @@ class AndroidConnection:
         self.boundary_recoveries = 0
 
     async def collect_versions(self):
-        # Cache only version/backend fields. Never echo the full server-status,
-        # which also contains paths to private ADB pairing keys and logs.
+        # 只读取版本与设备后端字段，避免输出配对密钥和日志路径。
         try:
             output = await self.adb.run('-s', self.serial, 'version', timeout=3)
             found = re.search(r'^Version (\S+)', output, re.MULTILINE)
@@ -206,8 +204,7 @@ class AndroidConnection:
                     raise SessionError('连接手机端超时。请打开配套应用、完成授权并启动接收后重试。') from None
                 await asyncio.sleep(0.5)
             except BaseException:
-                # A rejected/cancelled handshake has not injected a location. Do not send clear
-                # to an unauthenticated peer during outer cleanup and hide the original error.
+                # 握手失败时尚未发送位置，清理时直接关闭未认证的连接。
                 await self.disconnect_socket()
                 raise
 
@@ -255,7 +252,7 @@ class AndroidConnection:
             probe_task.cancel()
             stream = self.writer
             before_close = self.stream_snapshot(stream, started_at)
-            # A late reply must never be mistaken for the subsequent clear ACK.
+            # 关闭超时连接，避免迟到的回复与后续清理回执混淆。
             await self.disconnect_socket()
             after_close = self.stream_snapshot(stream, started_at)
             context = self.timeout_context(command, sequence, len(payload), started_at,
@@ -318,7 +315,6 @@ class AndroidConnection:
         return '\n电脑收发诊断（时间均相对本条指令开始，单位毫秒；不包含坐标或令牌）：\n' + '\n'.join(lines)
 
     async def diagnostic_status(self):
-        """Read only this service's bounded, coordinate-free debug snapshot via ADB."""
         if self.serial is None:
             return ''
         try:
@@ -332,10 +328,9 @@ class AndroidConnection:
             return '\n手机接收端诊断（断开后读取；写回完成不等于电脑已收到）：\n' + '\n'.join(lines)
         if 'No services match' in output:
             return '\n诊断时手机接收服务已不在运行。'
-        return '\n未读取到手机线程诊断；请用菜单10更新至诊断版 APK（1.1.2）后重试。'
+        return '\n未读取到手机接收端状态；请用菜单10安装或更新配套 APK。'
 
     async def set_motion(self, latitude: float, longitude: float, *, speed: float, bearing: float):
-        """Send the route's velocity, including zero immediately when holding a point."""
         await self.set(latitude, longitude, speed=speed, bearing=bearing)
 
     async def set(self, latitude: float, longitude: float, *, speed=None, bearing=None):

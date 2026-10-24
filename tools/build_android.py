@@ -1,10 +1,10 @@
-"""Build a local debug APK using only a JDK and installed Android SDK tools (no Gradle downloads)."""
 import argparse
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description='使用 JDK 和 Android SDK 构建本地调试 APK。')
     parser.add_argument('--sdk', type=Path, default=os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT'))
     parser.add_argument('--java-home', type=Path, default=os.environ.get('JAVA_HOME'))
     parser.add_argument('--build-tools', default='35.0.0')
@@ -34,8 +34,7 @@ def main():
         if not required.is_file():
             parser.error(f'缺少 SDK 组件：{required}')
     output = ROOT / 'build' / 'android'
-    # Each compilation uses a fresh directory so deleted classes cannot leak into the APK.
-    import tempfile
+    # 每次编译使用独立目录，防止残留的类文件进入 APK。
     output.mkdir(parents=True, exist_ok=True)
     task_env = dict(os.environ)
     task_env.update(TEMP=str(output), TMP=str(output), TMPDIR=str(output))

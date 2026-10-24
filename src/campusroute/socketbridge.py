@@ -1,5 +1,3 @@
-"""Bounded socket I/O in worker threads, independent of Windows IOCP streams."""
-
 import asyncio
 import socket
 import threading
@@ -72,7 +70,6 @@ class SocketStream:
         return await asyncio.to_thread(receive)
 
     def completed_frame(self):
-        """Only a full frame for the current read; never expose it to diagnostics."""
         return self._completed_frame
 
     @staticmethod
@@ -125,8 +122,7 @@ class SocketStream:
         if self.closed:
             return
         self.closed = True
-        # Cancellation of to_thread cannot interrupt recv itself. Shutdown wakes the
-        # reader so cancellation cannot leave a worker blocked on recv.
+        # 关闭连接以唤醒阻塞读取，确保取消后工作线程能够退出。
         try:
             self.socket.shutdown(socket.SHUT_RDWR)
         except OSError:
@@ -163,8 +159,7 @@ async def open_socket_connection(host: str, port: int, *, limit=8192, timeout=2)
     try:
         stream = await asyncio.to_thread(connect)
     except BaseException:
-        # A cancelled handshake may still finish connecting in its worker. Both
-        # sides of that race close the newly opened socket instead of leaking it.
+        # 连接任务取消后，清理工作线程可能稍后建立的连接。
         with guard:
             abandoned.set()
             for stream in opened:

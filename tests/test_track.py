@@ -48,8 +48,7 @@ class TrackTests(unittest.TestCase):
         corners = football_corners()
         feature = generate_track(corners, clearance_m=3, end_inset_m=12)
         track = feature['geometry']['coordinates']
-        # Dense sampling is at most two metres apart. Nearest sampled point can only
-        # slightly overestimate the true nearest distance to a semicircle.
+        # 采样点间距最多两米，最近采样点与圆弧的距离存在少量偏差。
         for corner in corners:
             nearest = min(Geodesic.WGS84.Inverse(corner[1], corner[0], point[1], point[0])['s12']
                           for point in track)
@@ -96,7 +95,7 @@ class TrackTests(unittest.TestCase):
 
 class TrackApiTests(unittest.TestCase):
     def setUp(self):
-        self.server = MapServer(presets())
+        self.server = MapServer(presets)
 
     def tearDown(self):
         self.server.close()

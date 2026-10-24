@@ -12,6 +12,8 @@
 
 Python 依赖通过包管理器安装；各发行包保留自身许可。Leaflet 的本地 JavaScript、CSS、图片资源未经修改，许可原文保存在 `LICENSES/Leaflet-BSD-2-Clause.txt` 与组件目录中。项目代码使用 GPL-3.0-or-later；Leaflet 资源与路线数据分别遵循原许可。
 
+开发检查使用 [build](https://github.com/pypa/build)、[twine](https://github.com/pypa/twine) 和 [Ruff](https://github.com/astral-sh/ruff)，通过 `dev` 可选依赖安装，各发行包保留自身许可。
+
 ## 地图数据
 
 `src/campusroute/data/` 中同济、复旦、交大、华东师大六条预设的路线几何源自 OpenStreetMap，由 © OpenStreetMap contributors 提供，按照 [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) 发布。许可原文见 `LICENSES/ODbL-1.0.txt`。这些路线文件中的 `source_url` 指向具体地图对象，`retrieved_at` 记录数据获取日期，`geometry_note` 说明路线几何的构成。

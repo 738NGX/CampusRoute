@@ -1,5 +1,3 @@
-"""Bounded, smoothly varying inputs for route playback."""
-
 import math
 from dataclasses import dataclass
 

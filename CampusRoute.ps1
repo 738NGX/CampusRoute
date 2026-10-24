@@ -3,6 +3,7 @@
     [string]$Adb = '',
     [ValidateSet('android', 'ios')]
     [string]$Backend = 'android',
+    [Alias('Upgrade')]
     [switch]$Repair
 )
 $ErrorActionPreference = 'Stop'
