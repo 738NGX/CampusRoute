@@ -60,8 +60,7 @@ class Motion:
         return 1000 / max(120, pace)
 
     def travel(self, start, end):
-        # Simpson integration with <=1s intervals: distance depends on the speed
-        # history, rather than multiplying all elapsed time by the latest speed.
+        # 使用不超过一秒的 Simpson 积分区间累计变速里程。
         count = max(1, math.ceil(end - start))
         step = (end - start) / count
         return sum(step / 6 * (self.speed_at(start + index * step)
@@ -112,8 +111,7 @@ class Motion:
         if self.phase != 'running':
             raise ValueError('当前没有正在进行的移动。')
         self.check_time(now)
-        # Hold the last computed (and, in the console, acknowledged) point.
-        # Do not catch up movement over a slow in-flight request before stopping.
+        # 暂停时保持最后确认的位置。
         self.phase = 'paused'
         self.previous_s = now
 
@@ -139,8 +137,7 @@ class Motion:
             before = self.path.position((distance - 2) % length)
             after = self.path.position((distance + 2) % length)
         else:
-            # Keep the same side of an open route when it turns back, including
-            # the endpoint itself; a direction reversal must not flip the offset.
+            # 开放路线折返时保持横向偏移方向连续。
             progress = distance % (2 * length)
             progress = min(progress, 2 * length - progress)
             before = self.path.position(max(0, progress - 2))
@@ -153,8 +150,7 @@ class Motion:
     def velocity(self):
         if self.phase != 'running':
             return 0.0, 0.0
-        # Look forward along the route rather than back along the previous
-        # transmission's chord, which lags behind the tangent on bends.
+        # 使用轨迹前方位置计算当前朝向。
         speed = self.speed_at(self.elapsed_s)
         ahead = self.position_at(self.distance_m + 0.5, self.elapsed_s + 0.5 / speed)
         bearing = Geodesic.WGS84.Inverse(*self.position, *ahead)['azi1'] % 360

@@ -3,11 +3,11 @@ from pathlib import Path
 
 
 class InstallationError(RuntimeError):
-    """An APK installation failed before any location session was opened."""
+    pass
 
 
 class SessionError(RuntimeError):
-    """A device session failed; the console can discard it and accept a new one."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -20,10 +20,8 @@ class IosBackend:
     name = 'iPhone'
 
     def __init__(self):
-        try:
-            from campusroute import device
-        except ModuleNotFoundError as error:
-            raise RuntimeError('iPhone 后端需要可选依赖，请执行 python -m pip install -e ".[ios]"。') from error
+        from campusroute import device
+
         self.device = device
 
     async def devices(self):

@@ -10,20 +10,28 @@ export TMPDIR="$task_temporary"
 export PYTHONDONTWRITEBYTECODE=1
 task_prefix="$task_root/.conda/campusroute"
 task_python="$task_prefix/bin/python"
+task_repair=0
+case "${1:-}" in
+    '') ;;
+    --upgrade|--repair) task_repair=1 ;;
+    *) print '用法：./CampusRoute.command [--upgrade|--repair]'; exit 2 ;;
+esac
 
 task_environment_ready() {
     [[ -x "$task_python" ]] || return 1
-    "$task_python" -B -c 'import campusroute.console; import campusroute.device; from importlib.metadata import distribution; distribution("campusroute")' || return 1
+    "$task_python" -B "$task_root/tools/check_environment.py" --backend ios || return 1
     "$task_python" -B -m pip --no-cache-dir --disable-pip-version-check check
 }
 
-if ! task_environment_ready >/dev/null 2>&1; then
-    print '独立环境尚未准备完成，或程序及依赖不完整。'
-    print '1  安装／修复环境'
-    print '0  退出'
-    read -r 'task_reply?请选择数字并按回车：'
-    if [[ "$task_reply" != '1' ]]; then
-        exit 0
+if [[ "$task_repair" == '1' ]] || ! task_environment_ready >/dev/null 2>&1; then
+    if [[ "$task_repair" == '0' ]]; then
+        print '环境缺失、版本不一致或依赖不完整，需要安装／升级。'
+        print '1  安装／升级／修复环境'
+        print '0  退出'
+        read -r 'task_reply?请选择数字并按回车：'
+        if [[ "$task_reply" != '1' ]]; then
+            exit 0
+        fi
     fi
     if ! command -v conda >/dev/null 2>&1; then
         print '安装或修复需要 Miniconda。请按照 README 安装，并在 Terminal 中启用 conda。'

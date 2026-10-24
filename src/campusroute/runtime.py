@@ -12,7 +12,6 @@ class AlreadyRunningError(RuntimeError):
 
 @contextmanager
 def console_output():
-    """Enable cursor controls in traditional Windows cmd as well as Windows Terminal."""
     if sys.platform != 'win32' or not sys.stdout.isatty():
         yield
         return

@@ -24,7 +24,7 @@
       <li>选择附近校区作为地图中心，或者输入 WGS84 经纬度。</li>
       <li>选择“四点足球场”，点击足球场四个角，自动生成跑道；拖动角点可以调整。</li>
       <li>也可以选择“逐点绘制”。环形路线需闭合，开放路线沿原路往返。</li>
-      <li>下载 GeoJSON 文件，在操作窗口选择 <strong>7 → I</strong> 并粘贴文件路径。</li>
+      <li>完成绘制后默认保存为新路线，返回操作窗口选择 <strong>7 → 对应编号</strong>。</li>
     </ol>
     <label for="center">地图中心（纬度,经度）</label>
     <div class="row"><input id="center" placeholder="31.2815,121.5065"><button id="locate">前往</button></div>
@@ -51,10 +51,13 @@
     </div>
     <div class="row"><button id="draw">开始绘制</button><button id="undo">撤销最后一点</button></div>
     <div class="row"><button id="close">闭合路线</button><button id="clear">清空路线</button></div>
-    <button id="download" class="primary">下载 GeoJSON 路线</button>
+    <label class="save-option"><input id="save-route" type="checkbox" checked>保存为路线选项，供下次使用</label>
+    <p class="muted">取消勾选后仅在本次窗口提供编号。默认保存开关可在终端菜单12设置。</p>
+    <button id="complete" class="primary">完成路线</button>
+    <button id="download">下载 GeoJSON 副本</button>
     <p id="status" role="status" aria-live="polite">正在加载操场路线……</p>
     <p id="tile-warning" class="muted" hidden>底图加载失败，请检查网络。已有路线仍可查看、编辑和下载。</p>
-    <p class="muted">地图底图需要联网。绘制内容保存在当前浏览器页面，下载后由操作窗口导入。定位控制通过操作窗口执行。</p>
+    <p class="muted">地图底图需要联网。点击完成后显示路线编号；需要额外文件时点击下载副本。路线收藏保存在本地，定位控制通过操作窗口执行。</p>
     <p class="muted">全部坐标使用 WGS84。请勿直接粘贴高德 GCJ-02 或百度 BD-09 坐标。</p>
     <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">底图及部分预设 © OpenStreetMap contributors · 路线数据 ODbL 1.0</a>
   </aside>

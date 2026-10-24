@@ -11,7 +11,9 @@ input, select { width: 100%; padding: 10px; background: white; color: #20332d; m
 button { padding: 10px 12px; cursor: pointer; background: #edf2ec; color: #244b3c; }
 button:hover { background: #dde9de; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #86b5a0; outline-offset: 2px; }
-#copy, #download { width: 100%; margin-top: 12px; }
+#copy, #complete, #download { width: 100%; margin-top: 12px; }
+.save-option { display: flex; align-items: center; gap: 8px; }
+.save-option input { width: auto; }
 .primary { background: #27634c; color: white; border-color: #27634c; }
 .primary:hover { background: #1c503c; }
 .row { display: flex; gap: 8px; margin-top: 10px; }

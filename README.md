@@ -4,7 +4,7 @@
 
 把操场装进数字菜单：选择路线、设置配速、准备起点，然后用几个数字控制一段旅程。
 
-软件名称：**CampusRoute** · 平台：**Windows + Android（已完成部分真机验收）／macOS + iPhone（保留后端）** · 代码许可：**GPL-3.0-or-later**
+软件名称：**CampusRoute** · 平台：**macOS + iPhone／Windows + iPhone／Windows + Android** · 代码许可：**GPL-3.0-or-later**
 
 **📦 [下载最新版本](https://github.com/ArtemisJLV/CampusRoute/releases/latest)** · [查看版本更新记录](https://github.com/ArtemisJLV/CampusRoute/releases)
 
@@ -13,16 +13,31 @@
 - 🏟️ 上海五所高校、七个校区的操场预设，附地图与来源说明；上财武东路线为用户四点生成的估算轨迹。
 - 🎨 路线可以自己绘制，也可以导入 GPX／GeoJSON。
 - ⏱️ 配速从 **2:00／公里** 起步，慢速没有人为上限，目标距离自行设置。
+- 🌊 可选配速波动与轨迹横向偏移，幅度自行设置，默认关闭。
 - 🎛️ 开始、暂停、继续、中止、恢复定位，全部收进一个数字菜单。
-- 💾 自动记住上次的路线、配速和目标距离；运行进度保存在内存中。
+- 💾 自动收藏自定义路线并分配数字编号，记住路线、配速和目标距离；运行进度保存在内存中。
 
 CampusRoute 使用 Android 标准模拟位置接口或 iPhone 开发者定位接口播放路线，可用于地图、路线和位置功能的调试。默认目标为5公里，默认配速为2:00／公里。
 
+## Python 版本与平台支持
+
+**最低要求：Python 3.11（`>=3.11`）**。安装配置与启动器均不设置 Python 版本上限。
+
+**经过 CI 验证的版本：Python 3.11、3.12、3.13、3.14、3.15**，均已通过 macOS 和 Windows 的依赖安装、测试与环境检查，详见[验证记录](https://github.com/ArtemisJLV/CampusRoute/actions/runs/40126143841)。[持续集成工作流](https://github.com/ArtemisJLV/CampusRoute/actions/workflows/test.yml)会继续检查这五个版本。
+
+| 使用组合 | 启动入口 | 验证情况 |
+| --- | --- | --- |
+| macOS + iPhone | `CampusRoute.command` | Apple Silicon Mac 已完成手机操作验证；Intel Mac 尚未验证 |
+| Windows + iPhone | `CampusRoute.bat` | 已提供设备连接、开发者镜像准备与路线控制，完整手机操作仍需真机验收 |
+| Windows + Android 10+ | `CampusRoute.cmd` | 已提供 ADB 连接与配套接收应用，完整手机操作及厂商兼容性仍需真机验收 |
+
+自动检查验证程序、依赖与启动流程。手机系统、驱动、开发者服务以及目标应用的定位行为需要结合真实设备确认。较新 Python 版本的可用性也取决于第三方依赖的支持情况。
+
 ## Windows + Android 开始使用
 
-Python 支持范围调整为 **3.11—3.13**。本机已在 Windows 的3.11和3.12运行自动化测试，3.13配置了CI矩阵，尚未在本机执行。Android配套APK最低支持Android 10；荣耀Magic5 / Android 16 / MagicOS 10曾完成120秒移动及重启高德测试，但用户随后手动操作仍复现回执超时，当前稳定性尚未通过验收。APK1.1.2与电脑端增加分阶段诊断，由用户手动复测定位。
+Windows 需要 Python **3.11 或更新版本**，Android 配套 APK 最低支持 Android 10。兼容性与验收项目见 [Android说明](docs/android.md)。
 
-1. 准备 Python 3.11—3.13 和 Android SDK Platform-Tools，确保 `adb` 在 PATH 中；手机开启 USB 调试，解锁后允许电脑调试。
+1. 准备 Python 3.11 或更新版本和 Android SDK Platform-Tools，确保 `adb` 在 PATH 中；手机开启 USB 调试，解锁后允许电脑调试。
 2. 双击 **`CampusRoute.cmd`**，创建或使用项目内 `.venv` 环境。需要指定解释器时，在 PowerShell 中执行 `./CampusRoute.ps1 -Python 'Python完整路径'`。
 3. 选择菜单 **10** 安装 `build/android/CampusRoute-debug.apk`。源码没有预置APK时，先按下方说明构建。
 4. **7 → 选择路线，8 → 设置参数，1 → 连接手机**。连接时会打开手机端；在开发者选项中选择 CampusRoute 为模拟位置应用，允许定位权限并点击 **启动接收**。
@@ -34,27 +49,27 @@ APK可以使用Android Studio打开 `android/` 构建，也可以在已安装JDK
 python tools/build_android.py --sdk 'Android SDK路径' --java-home 'JDK路径'
 ```
 
-需要指定ADB时使用 `./CampusRoute.ps1 -Adb 'adb.exe完整路径'`；修复环境使用 `-Repair`。也可从 [Google 官方页面](https://developer.android.com/tools/releases/platform-tools)下载 Platform-Tools，解压为项目内 `work/android-sdk/platform-tools/`；程序优先使用此处的ADB，其次查找 PATH 与 Android SDK 环境变量，显式 `-Adb` 始终优先。Windows版不需要安装任何Apple依赖。完整构建步骤、通信行为和荣耀手机验收清单见 [Android说明](docs/android.md)。
+需要指定ADB时使用 `./CampusRoute.ps1 -Adb 'adb.exe完整路径'`；升级或修复环境使用 `-Upgrade`。也可从 [Google 官方页面](https://developer.android.com/tools/releases/platform-tools)下载 Platform-Tools，解压为项目内 `work/android-sdk/platform-tools/`；程序优先使用此处的ADB，其次查找 PATH 与 Android SDK 环境变量，显式 `-Adb` 始终优先。Android 模式安装通用依赖；iPhone 模式另外安装 `ios` 可选依赖。完整构建步骤与故障处理见 [Android说明](docs/android.md)。
 
 Android位置更新通过USB上的持续连接传输并要求回执。断线或连续5秒未收到完整指令后，手机尝试移除模拟位置。系统强制结束、厂商电池管理及定位权限变化仍需实机验证。Android模拟位置带有系统标记，目标应用是否使用这些位置由其自身实现决定。
 
-## macOS + iPhone 所需环境
+## iPhone 所需环境（macOS／Windows）
 
 | 装备 | 要求 |
 | --- | --- |
-| Mac | macOS，已验证 Apple Silicon；Intel Mac 尚未验证 |
+| 电脑 | macOS（已验证 Apple Silicon；Intel Mac 尚未验证）或 Windows 10/11 64 位 |
 | iPhone | iOS 17.4 或更新版本，开启开发者模式 |
-| 数据线 | 支持数据传输；手机解锁并信任电脑，Finder 能识别设备 |
-| Miniconda | 用于创建独立的 Python 3.11 环境 |
+| 数据线 | 支持数据传输；手机解锁并信任电脑。macOS 用 Finder 识别，Windows 需安装 Apple 设备支持（iTunes 或“Apple 设备”应用） |
+| Python 环境 | 最低 Python 3.11；macOS 使用 Miniconda 创建独立环境，Windows 启动器创建 `.venv` |
 | 网络 | 首次安装依赖、准备开发者镜像和加载地图底图时需要联网 |
-| 开发者镜像 | 由 pymobiledevice3 准备，须与手机系统版本兼容；可使用现有 Xcode 安装 |
+| 开发者镜像 | 由 pymobiledevice3 准备，须与手机系统版本兼容；macOS 可使用现有 Xcode 安装 |
 
 手机开发者模式入口：**设置 → 隐私与安全性 → 开发者模式**。开启后按照系统提示重启并确认。系统升级可能影响开发者服务兼容性。
 
-## macOS 三步进入控制台
+## iPhone 三步进入控制台
 
 1. 从[最新版本发布页](https://github.com/ArtemisJLV/CampusRoute/releases/latest)的 **Assets** 下载 CampusRoute 压缩包，解压到一个固定文件夹。
-2. 双击 **`CampusRoute.command`**，首次选择数字 **`1`** 安装独立环境。
+2. macOS 双击 **`CampusRoute.command`**，需要准备环境时选择数字 **`1`**；Windows 双击 **`CampusRoute.bat`**，启动器会安装或更新 iPhone 依赖。Windows 的 **`CampusRoute.cmd`** 用于 Android。
 3. 连接并解锁 iPhone，开始选择路线和参数。
 
 终端打开后，会显示：
@@ -64,29 +79,53 @@ CampusRoute  |  iPhone 路线调试
 在家里我们就练起来
 ```
 
-偏爱 Terminal 的朋友，也可以进入项目文件夹后执行：
+macOS 也可以进入项目文件夹后执行：
 
 ```sh
 mkdir -p work/.cache/tmp
 export TMPDIR="$PWD/work/.cache/tmp"
 conda env create --prefix ./.conda/campusroute --file environment.yml
+conda run --prefix ./.conda/campusroute python -m pip install --no-cache-dir -e '.[ios]'
 chmod +x CampusRoute.command
 ./CampusRoute.command
 ```
 
-Miniconda 需要已经在 Terminal 中启用。安装完成后，日常只需双击启动文件。环境位于 `.conda/campusroute`；更换项目文件夹位置后需要重新创建环境。
+Miniconda 需要已经在 Terminal 中启用。安装完成后，日常只需双击启动文件。macOS 环境位于 `.conda/campusroute`；Windows 环境位于 `.venv`。更换项目文件夹位置后需要重新创建环境。
+
+Windows 也可以在 PowerShell 中指定 iPhone 后端与 Python 路径：
+
+```powershell
+./CampusRoute.ps1 -Backend ios -Python 'Python完整路径'
+```
+
+Windows 手动安装 iPhone 依赖：
+
+```bat
+python -m venv .venv
+.venv\Scripts\python -m pip install -e ".[ios]"
+.venv\Scripts\python -m campusroute --root . --backend ios
+```
 
 ### 安装与修复
 
-每次启动都会检查程序能否导入、项目安装信息是否存在，以及依赖版本和依赖关系是否满足安装声明。需要准备环境时，窗口显示 **`1` 安装／修复环境** 和 **`0` 退出**。
+启动器同时核对已安装发行包版本、程序版本和当前源码版本，并检查所选设备后端的依赖。版本不一致时，macOS 显示 **`1` 安装／升级／修复环境** 和 **`0` 退出**；Windows 自动更新独立环境，检查通过后才会启动程序。
 
-选择1后，首次安装会创建独立环境；已有 Conda 环境会在原位置补齐程序和依赖。安装完成后会再次校验，通过后进入控制台。
+macOS 首次安装会创建 Python 3.11 或更新版本的独立 Conda 环境；已有环境会在原位置补齐程序和依赖。Windows 使用指定的 Python 3.11 或更新版本创建 `.venv`，根据所选后端安装当前项目。安装完成后会再次校验，通过后进入控制台。
 
-下载失败或安装中断时，请根据终端错误检查网络和 Miniconda 配置，再次双击启动文件并选择1继续。也可以进入项目文件夹，在 Terminal 中手动修复已有环境：
+下载失败或安装中断时，请根据终端错误检查网络和 Python 环境，再次双击启动文件并选择1继续。macOS 也可以进入项目文件夹，在 Terminal 中手动修复已有环境：
 
 ```sh
 conda env update --prefix ./.conda/campusroute --file environment.yml
+conda run --prefix ./.conda/campusroute python -m pip install --no-cache-dir -e '.[ios]'
 ```
+
+主动升级或修复当前源码对应的环境：
+
+```sh
+./CampusRoute.command --upgrade
+```
+
+Windows 使用 `./CampusRoute.ps1 -Backend ios -Upgrade` 升级 iPhone 环境；Android 环境使用 `./CampusRoute.ps1 -Upgrade`。`--repair`／`-Repair` 同样可用。升级入口安装本地项目文件夹内的版本；更新源码可重新下载压缩包或手动拉取 GitHub。
 
 ## 数字遥控器 🎛️
 
@@ -103,6 +142,7 @@ conda env update --prefix ./.conda/campusroute --file environment.yml
 | **9** | 打开操场地图，绘制自己的路线 |
 | **10** | Android后端：安装或更新配套APK |
 | **11** | 开关及设置配速波动、轨迹横向偏移 |
+| **12** | 设置自定义路线是否默认保存为本地收藏 |
 | **0** | 发送恢复真实定位指令，关闭地图服务并退出 |
 
 推荐操作顺序：**`7` 选择路线 → `8` 设置参数 → `1` 准备起点 → `2` 开始移动**。
@@ -117,9 +157,9 @@ conda env update --prefix ./.conda/campusroute --file environment.yml
 
 连接后，控制台约每秒原地刷新状态、累计距离、移动用时、手机已确认坐标及已发送速度／朝向，无需反复输入6。暂停或中止会在最后确认的位置立即发送零速度定位，收到回执后才显示成功，之后持续保持该点；暂停后距离与用时保持不变。刷新只在收到位置回执后进行。重定向到文件时不输出动态刷新控制符。
 
-Android 回执超时或无效时，只结束本次会话，显示完整错误和清理结果后返回菜单，保留路线、配速和目标距离。按手机提示停止并恢复后可用菜单1重新连接，不会自动继续移动；无需重启电脑端。此修复只涉及电脑端，继续使用APK1.1.2。
+Android 回执超时或无效时，结束本次会话，显示错误和清理结果后返回菜单，保留路线、配速和目标距离。按手机提示停止并恢复后可用菜单1重新连接，新连接等待用户开始移动。
 
-达到目标距离后，程序保持终点位置，等待选择5或0。路线、配速、目标距离与波动设置修改成功后立即保存到项目内 `work/settings.json`，下次启动自动恢复；连接状态和移动进度每次重新开始。首次启动仍使用默认设置。旧配置没有波动字段时默认关闭，其他设置照常恢复。配置损坏时会提示并恢复相应默认值，保存失败时会提示本次设置仅在当前窗口生效。
+达到目标距离后，程序保持终点位置，等待选择5或0。路线选择、配速、目标距离、波动与保存开关写入项目内 `work/settings.json`，下次启动自动恢复；连接状态和移动进度每次重新开始。首次启动使用默认设置。设置文件损坏时停止启动并显示错误，检查或删除该文件后可以重新设置。
 
 Ctrl+C和可处理的正常终止信号会触发设备清理。关闭窗口、强制结束进程或断电可能无法执行电脑端清理。Android接收端会在断线或超时后尝试移除模拟位置；也可点击手机端停止按钮。iPhone可重新连接后执行菜单1、5，必要时重启手机。
 
@@ -146,10 +186,12 @@ OSM预设保留地图对象链接、学校场馆资料、获取日期与许可�
 1. 在菜单 **9** 打开地图，选择附近校区，或输入 `纬度,经度` 移动地图中心。
 2. 默认选择 **四点足球场 → 自动生成跑道**，点击 **选取足球场四角**，沿球场边缘点选四个角；程序自动生成闭合跑道。
 3. 拖动蓝色角点可修正位置；调整 **最小间距** 和 **弯道内收** 可改变跑道大小。也可切换为 **逐点绘制路线**；手动画环形路线时点击 **闭合路线**。
-4. 填写路线名称，点击 **下载 GeoJSON 路线**。
-5. 回到操作窗口，输入 **7 → I**，粘贴下载文件的完整路径。
+4. 填写路线名称，点击 **完成路线**。默认勾选保存，页面会显示新路线编号；需要文件副本时另行点击 **下载 GeoJSON 副本**。
+5. 回到操作窗口，输入 **7 → 对应编号**。保存的路线在下次启动仍然可选；也可以使用 **7 → I** 导入已有 GPX／GeoJSON 文件。
 
-导入的当前路线会随配置保存完整坐标和来源信息，下次启动无需重新导入，原文件移动或删除也不影响恢复。切换路线后配置只保留新选择；如需收藏多条自定义路线，请保留下载的原文件。编辑内置路线后下载的文件会保留来源与数据许可。
+绘制完成和导入的路线默认加入 `user-routes/routes.geojson`，内置路线之后按保存顺序分配数字编号。重复保存相同路线会复用已有选项，切换路线保留全部收藏，原导入文件移动或删除不影响使用。编辑内置路线时保留来源与数据许可。
+
+地图取消勾选 **保存为路线选项，供下次使用**，该路线仅在本次窗口提供编号。终端菜单 **12 → 2** 可以关闭后续导入和地图的默认保存，**12 → 1** 重新开启；已经打开的地图页面需要重新加载以采用新的默认值。关闭保存开关会保留现有收藏。手动下载的 GeoJSON 文件由用户管理。
 
 地图右上角与侧栏实时显示当前轨迹总距离，闭合路线为单圈长度，开放路线为单程长度。四点选择、角点拖动、参数调整和手动编辑后会重新计算，距离与播放模块同样采用 WGS84 椭球计算。
 
@@ -181,7 +223,7 @@ GeoJSON 示例：
 
 ## 关于本地记录 🫧
 
-程序在 `work/settings.json` 保存当前路线、配速和目标距离；自定义路线包含坐标和来源信息，内置路线保存预设标识。删除此文件即可恢复默认设置。该文件不提交到版本库，也不随临时目录清理。设备标识、移动进度和会话令牌只保存在进程内存中；程序不保存运行日志或操作历史，错误信息直接显示在当前终端。macOS使用目录锁，Windows使用命名互斥量，不生成锁文件。Android接收端的会话和坐标保存在内存中，不自动恢复或重播旧轨迹。
+程序在 `work/settings.json` 保存路线选择、配速、目标距离、波动与保存开关，在 `user-routes/routes.geojson` 保存收藏路线的坐标和来源。关闭自动保存后，临时路线留在当前窗口内存中，不写入设置文件。删除设置文件恢复默认参数；删除路线收藏前，请先切换到内置路线。两个目录都不提交到版本库。设备标识、移动进度和会话令牌只保存在进程内存中；程序不保存运行日志或操作历史，错误信息直接显示在当前终端。macOS使用目录锁，Windows使用命名互斥量，不生成锁文件。Android接收端的会话和坐标保存在内存中，不自动恢复或重播旧轨迹。
 
 运行所需的临时目录位于项目内 `work/.cache/`，正常退出时清理本次运行子目录。主动下载的路线文件由用户保存；Python环境、Android构建产物和调试密钥、Apple设备配对资料和开发者镜像供后续使用。ADB和操作系统自行管理其缓存和记录。
 
@@ -191,6 +233,25 @@ GeoJSON 示例：
 
 代码采用 **GPL-3.0-or-later**，完整条款见 [LICENSE](LICENSE)。路线数据采用 **ODbL-1.0**，Leaflet 地图组件保留 **BSD-2-Clause** 原许可。
 
+感谢两位贡献者参与完善 CampusRoute：
+
+- [@738NGX](https://github.com/738NGX)：贡献 Windows 与 Android 支持、Android 配套应用、配速和轨迹波动、四点生成跑道、路线距离显示及用户配置保存，详见 [PR #1](https://github.com/ArtemisJLV/CampusRoute/pull/1)。
+- [@windfall-gif](https://github.com/windfall-gif)：贡献 Windows + iPhone 启动与连接支持，以及开发者镜像准备流程，详见 [PR #2](https://github.com/ArtemisJLV/CampusRoute/pull/2)。
+
 感谢 [pymobiledevice3](https://github.com/doronz88/pymobiledevice3)、[gpxpy](https://github.com/tkrajina/gpxpy)、[GeographicLib](https://github.com/geographiclib/geographiclib-python)、[geojson](https://github.com/jazzband/geojson)、[Leaflet](https://leafletjs.com/) 和 [OpenStreetMap contributors](https://www.openstreetmap.org/copyright)。版本、用途、许可及场馆资料详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 学校名称用于标识公开场馆。使用开发者定位接口时，应遵守目标应用的使用规则；应用自身决定轨迹显示、距离计算与记录有效性。
+
+## 一起开发 🔧
+
+```sh
+python -m pip install -e '.[dev,ios]'
+python -m unittest discover -s tests -v
+python -m ruff check src tools tests
+python tools/check_source.py
+python -m build
+python -m twine check dist/*
+python tools/check_distribution.py
+```
+
+GitHub Actions 在推送、Pull Request 和手动运行时检查 Windows／macOS 的 Python 3.11—3.15、源码规范、全部测试、依赖、JavaScript 语法与启动器，另外构建并检查 Python 发行包和 Android APK，共12项检查。构建产物保留7天，可在 Actions 页面下载；正式版本下载见 Releases。

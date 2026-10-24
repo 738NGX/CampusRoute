@@ -1,15 +1,12 @@
-"""Local preferences, independent of device sessions and temporary runtime files."""
-
 import json
 import math
-import os
-import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import geojson
 
 from campusroute.routes import Route, RoutePath, route_from_feature
+from campusroute.storage import write_json
 from campusroute.variation import Variation
 
 
@@ -19,75 +16,48 @@ class Settings:
     pace_s: int = 120
     target_m: float = 5000
     variation: Variation = field(default_factory=Variation)
+    save_custom_routes: bool = True
+
+    def __post_init__(self):
+        if type(self.pace_s) is not int or self.pace_s < 120:
+            raise ValueError('保存的配速必须为每公里至少120秒。')
+        if type(self.target_m) not in (int, float) or not math.isfinite(self.target_m) or self.target_m <= 0:
+            raise ValueError('保存的目标距离必须为有限的正数。')
+        if type(self.save_custom_routes) is not bool:
+            raise ValueError('自定义路线保存开关必须为布尔值。')
 
 
 class SettingsStore:
     def __init__(self, root: Path):
         self.path = root / 'work' / 'settings.json'
 
-    def load(self, routes: list[Route]) -> tuple[Settings, str]:
-        settings = Settings(routes[0])
-        try:
-            data = json.loads(self.path.read_text(encoding='utf-8'))
-        except FileNotFoundError:
-            return settings, ''
-        except (OSError, ValueError) as error:
-            return settings, f'无法读取上次配置，已使用默认设置：{error}'
+    def load(self, routes: list[Route]) -> Settings:
+        if not self.path.exists():
+            return Settings(routes[0])
+        data = json.loads(self.path.read_text(encoding='utf-8'))
         if not isinstance(data, dict) or type(data.get('version')) is not int or data['version'] != 1:
-            return settings, '上次配置格式无法识别，已使用默认设置。'
-
-        invalid = []
-        if 'variation' in data:
-            try:
-                settings.variation = Variation(**data['variation'])
-            except (TypeError, ValueError, OverflowError):
-                invalid.append('波动设置')
-        pace = data.get('pace_s')
-        if type(pace) is int and pace >= 120:
-            settings.pace_s = pace
+            raise ValueError('设置文件格式无法识别，请检查 work/settings.json，或删除该文件恢复默认设置。')
+        selected = data['route']
+        if selected['kind'] == 'preset':
+            matches = [item for item in routes if item.properties.get('id') == selected['id']]
+        elif selected['kind'] == 'saved':
+            matches = [item for item in routes if item.properties.get('local_id') == selected['id']]
+        elif selected['kind'] == 'custom':
+            matches = [route_from_feature(geojson.loads(json.dumps(selected['feature'])))]
         else:
-            invalid.append('配速')
-        target = data.get('target_m')
-        try:
-            valid_target = type(target) in (int, float) and math.isfinite(target) and target > 0
-        except OverflowError:
-            valid_target = False
-        if valid_target:
-            settings.target_m = target
-        else:
-            invalid.append('目标距离')
-        try:
-            selected = data['route']
-            if selected['kind'] == 'preset':
-                settings.route = next(route for route in routes if route.properties.get('id') == selected['id'])
-            elif selected['kind'] == 'custom':
-                route = route_from_feature(geojson.loads(json.dumps(selected['feature'])))
-                RoutePath(route)
-                settings.route = route
-            else:
-                raise ValueError('Unknown route kind')
-        except (KeyError, TypeError, ValueError, AttributeError, StopIteration, OverflowError):
-            invalid.append('路线')
-        message = f'上次配置中的{"、".join(invalid)}无效，已恢复对应默认值。' if invalid else ''
-        return settings, message
+            raise ValueError('保存的路线类型无法识别。')
+        if not matches:
+            raise ValueError('已选择的路线不存在，请检查路线收藏，或删除 work/settings.json 重新选择。')
+        RoutePath(matches[0])
+        return Settings(matches[0], data['pace_s'], data['target_m'],
+                        Variation(**data.get('variation', {})), data.get('save_custom_routes', True))
 
     def save(self, settings: Settings, routes: list[Route]):
-        if settings.route in routes:
-            selected = {'kind': 'preset', 'id': settings.route.properties['id']}
-        else:
-            selected = {'kind': 'custom', 'feature': settings.route.feature()}
-        content = json.dumps({
-            'version': 1, 'route': selected,
-            'pace_s': settings.pace_s, 'target_m': settings.target_m,
-            'variation': asdict(settings.variation),
-        }, ensure_ascii=False, allow_nan=False, indent=2) + '\n'
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary = tempfile.mkstemp(prefix='settings-', suffix='.tmp', dir=self.path.parent)
-        try:
-            with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:
-                handle.write(content)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, self.path)
-        finally:
-            Path(temporary).unlink(missing_ok=True)
+        route = settings.route if settings.route in routes and not settings.route.properties.get('session_only') else routes[0]
+        local_id = route.properties.get('local_id')
+        selected = {'kind': 'saved', 'id': local_id} if local_id else {'kind': 'preset', 'id': route.properties['id']}
+        write_json(self.path, {
+            'version': 1, 'route': selected, 'pace_s': settings.pace_s,
+            'target_m': settings.target_m, 'variation': asdict(settings.variation),
+            'save_custom_routes': settings.save_custom_routes,
+        })

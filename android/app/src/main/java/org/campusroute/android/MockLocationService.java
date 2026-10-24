@@ -179,7 +179,7 @@ public final class MockLocationService extends Service {
                     socket.setTcpNoDelay(true);
                     handle(socket);
                 } catch (SocketTimeoutException error) {
-                    // Accept timeout is harmless; a read timeout ends the location lease below.
+                    // 等待连接超时后继续监听，读取指令超时则结束定位会话。
                     if (client != null) {
                         markFailure();
                         disconnectReason = "read_timeout";
@@ -364,8 +364,7 @@ public final class MockLocationService extends Service {
     }
 
     @Override protected void dump(FileDescriptor fd, PrintWriter writer, String[] args) {
-        // Read volatile snapshots only: a blocked location call must not block diagnostics
-        // on locationLock. Never include a session token, command payload, or coordinates.
+        // 读取内存中的状态快照，避免定位调用阻塞诊断，不包含令牌、指令正文或坐标。
         Phase current = phase;
         long now = SystemClock.elapsedRealtime();
         writer.println("CR diagnostics=2 app_version=1.1.2 running=" + running);

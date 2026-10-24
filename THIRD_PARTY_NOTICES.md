@@ -3,6 +3,7 @@
 | 项目 | 用途 | 版本 | 原许可 |
 | --- | --- | --- | --- |
 | [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) | 可选iPhone后端：USB 设备识别、开发者服务、定位接口 | 11.36.0 | GPL-3.0-or-later |
+| [packaging](https://packaging.pypa.io/) | iPhone 系统版本解析与兼容性检查 | 26.3 | Apache-2.0 OR BSD-2-Clause |
 | [gpxpy](https://github.com/tkrajina/gpxpy) | GPX 文件解析 | 1.6.2 | Apache-2.0 |
 | [GeographicLib for Python](https://github.com/geographiclib/geographiclib-python) | WGS84 椭球距离与路线插值 | 2.1 | MIT |
 | [geojson](https://github.com/jazzband/geojson) | GeoJSON 文件读取与校验 | 3.2.0 | BSD-3-Clause |
@@ -10,6 +11,8 @@
 | [OpenStreetMap](https://www.openstreetmap.org/copyright) | 校园路线几何与在线底图 | 路线文件中记录数据日期 | ODbL-1.0 |
 
 Python 依赖通过包管理器安装；各发行包保留自身许可。Leaflet 的本地 JavaScript、CSS、图片资源未经修改，许可原文保存在 `LICENSES/Leaflet-BSD-2-Clause.txt` 与组件目录中。项目代码使用 GPL-3.0-or-later；Leaflet 资源与路线数据分别遵循原许可。
+
+开发检查使用 [build](https://github.com/pypa/build)、[twine](https://github.com/pypa/twine) 和 [Ruff](https://github.com/astral-sh/ruff)，通过 `dev` 可选依赖安装，各发行包保留自身许可。
 
 ## 地图数据
 
