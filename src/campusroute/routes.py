@@ -1,4 +1,5 @@
 import bisect
+import json
 import math
 from dataclasses import dataclass, field
 from importlib.resources import files
@@ -120,3 +121,12 @@ def presets() -> list[Route]:
     if not routes:
         raise RuntimeError('未找到内置路线数据。')
     return sorted(routes, key=lambda route: route.properties['order'])
+
+
+def pending_venues() -> list[dict]:
+    """Venue facts without verified geometry are never returned as playable routes."""
+    directory = files('campusroute').joinpath('data', 'pending')
+    if not directory.is_dir():
+        return []
+    return [json.loads(path.read_text(encoding='utf-8'))
+            for path in sorted(directory.iterdir(), key=lambda item: item.name) if path.name.endswith('.json')]

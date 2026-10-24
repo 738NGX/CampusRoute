@@ -22,22 +22,48 @@
     <h2>自定义路线</h2>
     <ol>
       <li>选择附近校区作为地图中心，或者输入 WGS84 经纬度。</li>
-      <li>点击“开始绘制”，按移动顺序点击地图。拖动地图可以移动视野。</li>
-      <li>环形路线点击“闭合路线”；开放路线会沿原路往返。</li>
+      <li>选择“四点足球场”，点击足球场四个角，自动生成跑道；拖动角点可以调整。</li>
+      <li>也可以选择“逐点绘制”。环形路线需闭合，开放路线沿原路往返。</li>
       <li>下载 GeoJSON 文件，在操作窗口选择 <strong>7 → I</strong> 并粘贴文件路径。</li>
     </ol>
     <label for="center">地图中心（纬度,经度）</label>
     <div class="row"><input id="center" placeholder="31.2815,121.5065"><button id="locate">前往</button></div>
     <label for="name">路线名称</label>
     <input id="name" value="自定义路线" maxlength="120">
+    <section class="distance-summary" aria-label="轨迹距离">
+      <span>当前轨迹总距离</span>
+      <output id="distance" aria-live="polite">0.0 米</output>
+      <p id="distance-note">选取足球场四角后自动计算；闭合路线显示单圈长度。</p>
+    </section>
+    <label for="method">绘制方式</label>
+    <select id="method">
+      <option value="pitch">四点足球场 → 自动生成跑道</option>
+      <option value="manual">逐点绘制路线</option>
+    </select>
+    <p class="muted">切换绘制方式会清空当前编辑的路线。</p>
+    <div id="pitch-options">
+      <div class="parameter-grid">
+        <div><label for="clearance">最小间距（米）</label><input id="clearance" type="number" min="0" max="30" step="0.5" value="2"></div>
+        <div><label for="inset">弯道内收（米）</label><input id="inset" type="number" min="0" max="50" step="1" value="10"></div>
+      </div>
+      <p class="muted">最小间距为足球场边界到跑道的最近距离；内收调整两端半圆圆心相对球门线的位置。生成轨迹为规则跑道估算，不保证是实测跑道或标准400米。</p>
+      <p id="track-dimensions" class="muted"></p>
+    </div>
     <div class="row"><button id="draw">开始绘制</button><button id="undo">撤销最后一点</button></div>
     <div class="row"><button id="close">闭合路线</button><button id="clear">清空路线</button></div>
     <button id="download" class="primary">下载 GeoJSON 路线</button>
     <p id="status" role="status" aria-live="polite">正在加载操场路线……</p>
+    <p id="tile-warning" class="muted" hidden>底图加载失败，请检查网络。已有路线仍可查看、编辑和下载。</p>
     <p class="muted">地图底图需要联网。绘制内容保存在当前浏览器页面，下载后由操作窗口导入。定位控制通过操作窗口执行。</p>
     <p class="muted">全部坐标使用 WGS84。请勿直接粘贴高德 GCJ-02 或百度 BD-09 坐标。</p>
-    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">路线数据 © OpenStreetMap contributors · ODbL 1.0</a>
+    <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">底图及部分预设 © OpenStreetMap contributors · 路线数据 ODbL 1.0</a>
   </aside>
-  <main id="map" aria-label="操场地图"></main>
+  <div class="map-panel">
+    <main id="map" aria-label="操场地图"></main>
+    <div class="map-distance" aria-live="polite">
+      <span id="map-distance-label">足球场选点</span>
+      <strong id="map-distance-value">0 / 4</strong>
+    </div>
+  </div>
 </body>
 </html>

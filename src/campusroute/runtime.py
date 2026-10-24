@@ -1,5 +1,6 @@
-import fcntl
+import hashlib
 import os
+import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -10,27 +11,95 @@ class AlreadyRunningError(RuntimeError):
 
 
 @contextmanager
-def runtime(root: Path):
-    descriptor = os.open(root, os.O_RDONLY)
+def console_output():
+    """Enable cursor controls in traditional Windows cmd as well as Windows Terminal."""
+    if sys.platform != 'win32' or not sys.stdout.isatty():
+        yield
+        return
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
     try:
+        handle = msvcrt.get_osfhandle(sys.stdout.fileno())
+    except (OSError, ValueError):
+        yield
+        return
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.GetConsoleMode.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    kernel.GetConsoleMode.restype = wintypes.BOOL
+    kernel.SetConsoleMode.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel.SetConsoleMode.restype = wintypes.BOOL
+    previous = wintypes.DWORD()
+    changed = kernel.GetConsoleMode(handle, ctypes.byref(previous)) and kernel.SetConsoleMode(handle, previous.value | 0x0004)
+    try:
+        yield
+    finally:
+        if changed:
+            kernel.SetConsoleMode(handle, previous.value)
+
+
+@contextmanager
+def instance_lock(root: Path):
+    if sys.platform == 'win32':
+        import ctypes
+        from ctypes import wintypes
+
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.CreateMutexW.argtypes = (ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR)
+        kernel.CreateMutexW.restype = wintypes.HANDLE
+        kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel.CloseHandle.restype = wintypes.BOOL
+        identity = os.path.normcase(str(root.resolve())).encode('utf-8')
+        name = 'Local\\CampusRoute-' + hashlib.sha256(identity).hexdigest()
+        ctypes.set_last_error(0)
+        handle = kernel.CreateMutexW(None, False, name)
+        error = ctypes.get_last_error()
+        if not handle:
+            raise ctypes.WinError(error)
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise AlreadyRunningError('操作窗口已经打开，请使用现有窗口。') from None
+            if error == 183:
+                raise AlreadyRunningError('操作窗口已经打开，请使用现有窗口。')
+            yield
+        finally:
+            kernel.CloseHandle(handle)
+    else:
+        import fcntl
+
+        descriptor = os.open(root, os.O_RDONLY)
+        try:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise AlreadyRunningError('操作窗口已经打开，请使用现有窗口。') from None
+            yield
+        finally:
+            os.close(descriptor)
+
+
+@contextmanager
+def runtime(root: Path):
+    root = root.resolve()
+    with instance_lock(root):
         cache = root / 'work' / '.cache'
         cache.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='run-', dir=cache) as directory:
             previous_directory = tempfile.tempdir
-            previous_environment = os.environ.get('TMPDIR')
+            previous_environment = {key: os.environ.get(key) for key in ('TMPDIR', 'TEMP', 'TMP')}
             tempfile.tempdir = directory
-            os.environ['TMPDIR'] = directory
+            os.environ.update({key: directory for key in previous_environment})
+            if sys.platform == 'win32':
+                import ctypes
+                ctypes.windll.kernel32.SetThreadExecutionState(0x80000001)
             try:
-                yield
+                with console_output():
+                    yield
             finally:
+                if sys.platform == 'win32':
+                    ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
                 tempfile.tempdir = previous_directory
-                if previous_environment is None:
-                    os.environ.pop('TMPDIR')
-                else:
-                    os.environ['TMPDIR'] = previous_environment
-    finally:
-        os.close(descriptor)
+                for key, value in previous_environment.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
