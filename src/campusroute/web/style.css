@@ -15,6 +15,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .primary { background: #27634c; color: white; border-color: #27634c; }
 .primary:hover { background: #1c503c; }
 .row { display: flex; gap: 8px; margin-top: 10px; }
+.parameter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.distance-summary { margin-top: 18px; padding: 14px 16px; border: 1px solid #cad8cc; border-radius: 10px; background: #edf4ed; }
+.distance-summary > span { display: block; font-size: 13px; }
+.distance-summary output { display: block; margin: 5px 0; color: #27634c; font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.distance-summary p { margin: 0; color: #60766b; font-size: 12px; line-height: 1.7; }
+.corner-marker { display: grid; place-items: center; border: 2px solid white; border-radius: 50%; background: #3d78a4; color: white; font-size: 13px; font-weight: 700; box-shadow: 0 1px 5px #20332d66; cursor: move; }
+button:disabled { cursor: default; opacity: .5; }
+[hidden] { display: none !important; }
 .row button { flex: 1; white-space: nowrap; }
 #locate { flex: 0; }
 .divider { margin: 24px 0; height: 1px; background: #dce4dd; }
@@ -23,8 +31,14 @@ ol { padding-left: 21px; margin-bottom: 18px; font-size: 13px; line-height: 1.9;
 #status { padding: 12px; border-radius: 8px; background: #e8efe6; font-size: 13px; line-height: 1.7; }
 a { color: #315f4b; font-size: 12px; }
 #map { height: 100%; min-height: 450px; }
+.map-panel { position: relative; min-width: 0; height: 100%; }
+.map-distance { position: absolute; top: 16px; right: 16px; z-index: 800; padding: 12px 16px; border: 1px solid #dce4dd; border-radius: 10px; background: #fffffff2; box-shadow: 0 2px 8px #20332d22; pointer-events: none; }
+.map-distance span { display: block; color: #60766b; font-size: 12px; }
+.map-distance strong { display: block; margin-top: 4px; color: #a5502c; font-size: 24px; font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) {
   body { display: flex; flex-direction: column-reverse; height: auto; }
-  #map { height: 55vh; }
+  .map-panel { height: 55vh; min-height: 450px; }
+  .map-distance { top: 10px; right: 10px; padding: 9px 12px; }
+  .map-distance strong { font-size: 21px; }
   aside { overflow: visible; border: 0; }
 }
