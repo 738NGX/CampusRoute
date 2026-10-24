@@ -21,7 +21,9 @@ CampusRoute 使用 Android 标准模拟位置接口或 iPhone 开发者定位接
 
 ## Python 版本与平台支持
 
-**最低要求：Python 3.11（`>=3.11`）**。安装配置与启动器均不设置 Python 版本上限。GitHub Actions 在 macOS 和 Windows 上分别运行 **3.11、3.12、3.13、3.14、3.15** 的依赖安装、测试与环境检查；各版本是否已经验证通过，请查看[对应提交的检查结果](https://github.com/ArtemisJLV/CampusRoute/actions/workflows/test.yml)。尚未通过检查的版本不列为已验证版本。
+**最低要求：Python 3.11（`>=3.11`）**。安装配置与启动器均不设置 Python 版本上限。
+
+**经过 CI 验证的版本：Python 3.11、3.12、3.13、3.14、3.15**，均已通过 macOS 和 Windows 的依赖安装、测试与环境检查，详见[验证记录](https://github.com/ArtemisJLV/CampusRoute/actions/runs/40126143841)。[持续集成工作流](https://github.com/ArtemisJLV/CampusRoute/actions/workflows/test.yml)会继续检查这五个版本。
 
 | 使用组合 | 启动入口 | 验证情况 |
 | --- | --- | --- |
