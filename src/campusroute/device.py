@@ -2,12 +2,13 @@ import asyncio
 import sys
 from contextlib import AsyncExitStack
 
+from packaging.version import Version
 from pymobiledevice3.exceptions import DeveloperDiskImageNotFoundError
 from pymobiledevice3.lockdown import create_using_usbmux
+from pymobiledevice3.remote.userspace_tunnel import UserspaceRsdTunnel
 from pymobiledevice3.services.mobile_image_mounter import (
     AlreadyMountedError,
     auto_mount,
-    uses_personalized_image,
 )
 from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
 from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
@@ -24,19 +25,6 @@ async def device_label(serial: str):
         return f"{values['DeviceName']}（{values['ProductType']}，iOS {values['ProductVersion']}）"
 
 
-def _version_parts(version: str) -> tuple[int, int]:
-    numbers = []
-    for part in version.split("."):
-        digits = ""
-        for character in part:
-            if not character.isdigit():
-                break
-            digits += character
-        numbers.append(int(digits or "0"))
-    major, minor = (numbers + [0, 0])[:2]
-    return major, minor
-
-
 class DeviceConnection:
     def __init__(self):
         self.resources = AsyncExitStack()
@@ -46,21 +34,16 @@ class DeviceConnection:
     async def connect(self, serial: str):
         async with await create_using_usbmux(serial=serial, connection_type="USB") as lockdown:
             version = lockdown.all_values["ProductVersion"]
-            parts = _version_parts(version)
-            if parts < (17, 4):
+            if Version(version) < Version("17.4"):
                 raise RuntimeError("本版本要求 iOS 17.4 或更新版本。")
             enabled = await lockdown.get_value(
                 domain="com.apple.security.mac.amfi", key="DeveloperModeStatus"
             )
             if not enabled:
                 raise RuntimeError("请在 iPhone 的“隐私与安全性”中打开开发者模式，并完成重启确认。")
-            personalized = uses_personalized_image(lockdown)
-            mount_lockdown = None if personalized else lockdown
-        from pymobiledevice3.remote.userspace_tunnel import UserspaceRsdTunnel
-
         rsd = await self.resources.enter_async_context(UserspaceRsdTunnel(serial=serial, autopair=True))
         try:
-            await asyncio.wait_for(auto_mount(rsd if personalized else mount_lockdown), timeout=90)
+            await asyncio.wait_for(auto_mount(rsd), timeout=90)
         except AlreadyMountedError:
             pass
         except asyncio.TimeoutError as error:

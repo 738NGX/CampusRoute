@@ -3,17 +3,22 @@ import asyncio
 import logging
 import math
 import signal
+import shutil
 import sys
+import threading
 import time
+import unicodedata
 import webbrowser
 from pathlib import Path
 
 from campusroute import __version__
-from campusroute.device import DeviceConnection, device_label, usb_devices
+from campusroute.backends import InstallationError, SessionError, get_backend
 from campusroute.mapserver import MapServer
 from campusroute.motion import Motion, pace_label, parse_pace
-from campusroute.routes import RoutePath, presets, read_route
+from campusroute.routes import RoutePath, pending_venues, presets, read_route
 from campusroute.runtime import AlreadyRunningError, runtime
+from campusroute.settings import Settings, SettingsStore
+from campusroute.variation import Variation
 
 PHASE_NAMES = {
     'ready': '起点已准备', 'running': '正在移动', 'paused': '移动已暂停',
@@ -22,27 +27,42 @@ PHASE_NAMES = {
 
 
 class ConsoleApp:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, backend='android', adb=None):
         self.root = root
+        self.backend = get_backend(backend, adb, root)
         self.routes = presets()
-        self.route = self.routes[0]
-        self.pace_s = 120
-        self.target_m = 5000
+        self.settings_store = SettingsStore(root)
+        settings, self.settings_message = self.settings_store.load(self.routes)
+        self.route = settings.route
+        self.pace_s = settings.pace_s
+        self.target_m = settings.target_m
+        self.variation = settings.variation
         self.connection = None
         self.motion = None
         self.commands = asyncio.Queue()
         self.map_server = None
         self.closing = False
+        self.status_panel_visible = False
+        self.last_status_refresh = 0
+
+    def save_settings(self):
+        try:
+            self.settings_store.save(Settings(self.route, self.pace_s, self.target_m, self.variation), self.routes)
+        except (OSError, ValueError) as error:
+            return f'\n本次设置已生效，但无法保存供下次启动使用：{error}'
+        return ''
 
     def show_menu(self, message=''):
-        print('\033[2J\033[H', end='')
-        print(f'CampusRoute {__version__}  |  iPhone 路线调试')
-        print('在家里我们就练起来')
-        print(f'路线：{self.route.name}')
-        print(f'配速：{pace_label(self.pace_s)}／公里；目标：{self.target_m / 1000:g}公里')
-        print('状态：' + (PHASE_NAMES[self.motion.phase] if self.motion else '尚未连接'))
-        if self.motion:
-            print(f'当前累计距离：{self.motion.distance_m / 1000:.3f}公里；移动用时：{self.motion.elapsed_s:.1f}秒')
+        if sys.stdout.isatty():
+            print('\033[2J\033[H', end='')
+        for line in (f'CampusRoute {__version__}  |  {self.backend.name} 路线调试',
+                     '在家里我们就练起来', f'路线：{self.route.name}',
+                     f'配速：{pace_label(self.pace_s)}／公里；目标：{self.target_m / 1000:g}公里'):
+            print(self.terminal_line(line) if sys.stdout.isatty() else line)
+        for line in self.status_lines():
+            print(self.terminal_line(line) if sys.stdout.isatty() else line)
+        self.status_panel_visible = self.motion is not None
+        self.last_status_refresh = time.monotonic()
         if message:
             print('\n' + message)
         print('\n1  连接手机并准备起点')
@@ -54,46 +74,110 @@ class ConsoleApp:
         print('7  选择路线／导入自定义路线')
         print('8  设置配速与目标距离')
         print('9  打开操场地图／绘制自定义路线')
+        if hasattr(self.backend, 'install'):
+            print('10 安装／更新 Android 配套 APK')
+        print(f'11 设置配速／轨迹波动（{self.variation.label}）')
         print('0  恢复真实定位并退出')
         print('\n请选择数字并按回车：', end='', flush=True)
+
+    @staticmethod
+    def terminal_line(line):
+        # Keep each dashboard entry on one row, including Chinese and long route names.
+        available = max(1, shutil.get_terminal_size().columns - 1)
+        output, width = [], 0
+        for char in line:
+            if unicodedata.category(char).startswith('C'):
+                char = ' '
+            size = 0 if unicodedata.combining(char) else 2 if unicodedata.east_asian_width(char) in 'WF' else 1
+            if width + size > available:
+                break
+            output.append(char)
+            width += size
+        return ''.join(output)
+
+    def status_lines(self):
+        lines = ['状态：' + (PHASE_NAMES[self.motion.phase] if self.motion else '尚未连接')]
+        if self.motion:
+            lines.append(f'当前累计距离：{self.motion.distance_m / 1000:.3f}公里；移动用时：{self.motion.elapsed_s:.1f}秒')
+            if self.motion.variation.enabled:
+                seconds = round(1000 / self.motion.speed_at(self.motion.elapsed_s), 1)
+                pace = f'{int(seconds // 60)}:{seconds % 60:04.1f}／公里' if self.motion.phase == 'running' else '静止'
+                lines.append(f'当前运动配速：{pace}；波动已开启')
+        if self.connection and getattr(self.connection, 'last_position', None):
+            latitude, longitude = self.connection.last_position
+            lines.append(f'手机已确认坐标：{latitude:.7f}, {longitude:.7f}')
+        if self.connection and getattr(self.connection, 'last_motion', None) is not None:
+            speed, bearing = self.connection.last_motion
+            lines.append(f'已发送速度：{speed:.2f}米／秒；朝向：{bearing:.1f}°（正北为0°）')
+        return lines
+
+    def refresh_status(self):
+        now = time.monotonic()
+        if not sys.stdout.isatty() or not self.status_panel_visible or now - self.last_status_refresh < 1:
+            return
+        # Update the dashboard while preserving any partially typed command.
+        panel = ''.join(f'\033[{row};1H\033[2K' + self.terminal_line(line)
+                        for row, line in enumerate(self.status_lines(), 5))
+        print('\033[s' + panel + '\033[u', end='', flush=True)
+        self.last_status_refresh = now
 
     async def answer(self, prompt):
         print(prompt, end='', flush=True)
         return await self.commands.get()
 
-    async def connect(self):
-        devices = await usb_devices()
+    async def select_device(self):
+        devices = await self.backend.devices()
         if not devices:
-            raise RuntimeError('未检测到 USB 设备。请连接数据线、解锁手机，并确认 Finder 能够识别 iPhone。')
+            raise SessionError(f'未检测到 {self.backend.name} USB 设备。请连接数据线、解锁手机并完成设备授权。')
         selected = 0
         if len(devices) > 1:
             print('\n检测到多台设备，请选择：')
             for index, device in enumerate(devices, 1):
-                print(f'{index}  {await device_label(device.serial)}')
+                print(f'{index}  {device.label}')
             reply = await self.answer('设备编号（输入0取消）：')
             if reply == '0':
-                return False
+                return None
             if not reply.isdecimal() or not 1 <= int(reply) <= len(devices):
                 raise ValueError('设备编号无效。')
             selected = int(reply) - 1
+        return devices[selected]
+
+    async def connect(self):
+        device = await self.select_device()
+        if device is None:
+            return False
         print('\n正在准备开发者服务，请保持手机连接并解锁……', flush=True)
-        self.connection = DeviceConnection()
-        await self.connection.connect(devices[selected].serial)
-        self.motion = Motion(RoutePath(self.route), self.pace_s, self.target_m)
+        self.connection = self.backend.connection()
+        await self.connection.connect(device.serial)
+        self.motion = Motion(RoutePath(self.route), self.pace_s, self.target_m, variation=self.variation)
         await self.tick()
         return True
 
     async def restore(self):
-        if self.connection:
-            await self.connection.close()
-            self.connection = None
+        connection, self.connection = self.connection, None
         self.motion = None
+        if connection:
+            await connection.close()
+
+    async def end_failed_session(self, error):
+        """Discard a broken session without discarding the console or its settings."""
+        state = '\n' + '\n'.join(self.status_lines()) if self.motion else ''
+        message = f'本次连接已中断：{type(error).__name__}：{error}' + state
+        try:
+            await self.restore()
+        except Exception as cleanup_error:
+            message += f'\n清理未确认：{type(cleanup_error).__name__}：{cleanup_error}'
+            message += '\n请在手机点击“停止并恢复”，确认手机状态后再连接。'
+        message += '\n电脑端仍在运行，路线和设置已保留。输入1重新连接；不会自动继续移动。'
+        return message
 
     async def select_route(self):
         print('\n内置操场路线：')
         for index, route in enumerate(self.routes, 1):
             print(f'{index}  {route.name}')
         print('I  导入 GPX／GeoJSON；输入0返回菜单。')
+        for venue in pending_venues():
+            print(f'待补充：{venue["name"]}（跑道坐标待核验，暂不可播放）。')
         print('自定义方法：菜单9打开地图 → 逐点绘制 → 下载路线 → 在这里导入下载文件。')
         print('坐标要求：WGS84；GeoJSON 使用 [经度, 纬度]；GPX 需要一条连续路线。')
         print('闭合路线循环前进；开放路线沿原路往返。')
@@ -111,7 +195,7 @@ class ConsoleApp:
             self.route = self.routes[int(reply) - 1]
         else:
             raise ValueError('路线编号无效。')
-        return f'已选择：{self.route.name}。路线全长约{RoutePath(self.route).length_m:.1f}米。'
+        return f'已选择：{self.route.name}。路线全长约{RoutePath(self.route).length_m:.1f}米。' + self.save_settings()
 
     async def configure(self):
         print('\n配速格式为 分钟:秒，最快2:00／公里，慢速没有人为上限。')
@@ -126,7 +210,29 @@ class ConsoleApp:
         if not math.isfinite(target_m) or target_m <= 0:
             raise ValueError('目标公里数必须为有限的正数。')
         self.pace_s, self.target_m = pace_s, target_m
-        return '配速与目标距离已设置。'
+        return '配速与目标距离已设置。' + self.save_settings()
+
+    async def configure_variation(self):
+        print(f'\n当前波动：{self.variation.label}。配速和偏移缓慢变化，暂停、中止时保持静止。')
+        print('配速仍不快于2:00／公里；横向范围相对原路线，不代表一定处于跑道边界内。')
+        reply = await self.answer('1 开启／修改；2 关闭；0 取消：')
+        if reply == '0':
+            return '波动设置已取消。'
+        if reply == '2':
+            self.variation = Variation(False, self.variation.pace_percent, self.variation.lateral_m)
+        elif reply == '1':
+            reply = await self.answer(f'配速波动百分比，0—20（回车保留{self.variation.pace_percent:g}，Q取消）：')
+            if reply.lower() == 'q':
+                return '波动设置已取消。'
+            percent = float(reply) if reply else self.variation.pace_percent
+            reply = await self.answer(f'最大横向偏移米数，0—3（回车保留{self.variation.lateral_m:g}，Q取消）：')
+            if reply.lower() == 'q':
+                return '波动设置已取消。'
+            lateral = float(reply) if reply else self.variation.lateral_m
+            self.variation = Variation(True, percent, lateral)
+        else:
+            raise ValueError('请选择1、2或0。')
+        return f'波动已设置：{self.variation.label}。下次连接生效。' + self.save_settings()
 
     async def choose(self, choice):
         if choice == '0':
@@ -143,13 +249,29 @@ class ConsoleApp:
             return True, '已发送恢复真实定位指令，连接已关闭。' if had_connection else '当前没有设备连接。'
         if choice == '6':
             return True, '状态已刷新。'
-        if choice in ('7', '8', '9'):
+        if choice == '10' and hasattr(self.backend, 'install'):
+            if self.connection:
+                return True, '安装前请先选择5恢复定位并断开连接。'
+            default = self.root / 'build' / 'android' / 'CampusRoute-debug.apk'
+            raw = await self.answer(f'APK 完整路径（回车使用 {default}，输入0取消）：')
+            if raw == '0':
+                return True, '安装已取消。'
+            apk = Path(raw.strip().strip("\"'")) if raw else default
+            device = await self.select_device()
+            if device is None:
+                return True, '安装已取消。'
+            print('\n正在安装 APK，请保持手机解锁，并在手机弹窗中确认安装……', flush=True)
+            await self.backend.install(device.serial, apk)
+            return True, 'APK 已安装。请选择1连接，并在手机完成授权、启动接收。'
+        if choice in ('7', '8', '9', '11'):
             if self.connection:
                 return True, '修改路线或参数前，请选择5恢复定位并断开连接。'
             if choice == '7':
                 return True, await self.select_route()
             if choice == '8':
                 return True, await self.configure()
+            if choice == '11':
+                return True, await self.configure_variation()
             displayed = list(self.routes)
             if self.route not in displayed:
                 displayed.append(self.route)
@@ -174,8 +296,10 @@ class ConsoleApp:
             if self.motion.phase != 'running':
                 return True, '当前没有正在进行的移动。'
             self.motion.pause(time.monotonic())
+            await self.tick()
             return True, '移动已暂停，当前位置持续保持。输入2继续移动。'
         self.motion.stop(time.monotonic())
+        await self.tick()
         return True, '本次移动已中止，当前位置持续保持。输入5恢复定位，输入0退出。'
 
     async def tick(self):
@@ -183,99 +307,118 @@ class ConsoleApp:
             return
         previous = self.motion.phase
         self.motion.advance(time.monotonic())
-        await self.connection.set(*self.motion.position)
+        set_motion = getattr(self.connection, 'set_motion', None)
+        if set_motion:
+            speed, bearing = self.motion.velocity
+            await set_motion(*self.motion.position, speed=speed, bearing=bearing)
+        else:
+            await self.connection.set(*self.motion.position)
         if previous != 'finished' and self.motion.phase == 'finished':
             self.show_menu('目标距离已完成，当前位置持续保持。输入5恢复定位，输入0退出。')
+        else:
+            self.refresh_status()
 
     async def run(self):
         loop = asyncio.get_running_loop()
-        descriptor = None if sys.platform == 'win32' else sys.stdin.fileno()
-        reader_task = None
+        task = asyncio.current_task()
+        input_closed = threading.Event()
 
         def receive():
-            line = sys.stdin.readline()
-            if line == '':
-                if descriptor is not None:
-                    loop.remove_reader(descriptor)
-                request_exit()
-            else:
-                self.commands.put_nowait(line.strip())
-
-        def request_exit():
-            self.closing = True
-            self.commands.put_nowait('0')
-
-        if descriptor is None:
-            def receive_forever():
-                while not self.closing:
+            # 输入线程允许阻塞读取，退出时由主任务完成资源清理。
+            while not input_closed.is_set():
+                try:
                     line = sys.stdin.readline()
-                    if line == '':
-                        loop.call_soon_threadsafe(request_exit)
-                        return
-                    loop.call_soon_threadsafe(self.commands.put_nowait, line.strip())
+                except (OSError, ValueError):
+                    line = ''
+                if input_closed.is_set():
+                    return
+                try:
+                    loop.call_soon_threadsafe(self.commands.put_nowait, line.strip() if line else '0')
+                except RuntimeError:
+                    return
+                if not line:
+                    return
 
-            reader_task = asyncio.create_task(asyncio.to_thread(receive_forever))
-        else:
-            loop.add_reader(descriptor, receive)
-        for event in (signal.SIGINT, signal.SIGTERM, getattr(signal, 'SIGHUP', None), getattr(signal, 'SIGBREAK', None)):
-            if event is None:
-                continue
-            try:
-                loop.add_signal_handler(event, request_exit)
-            except NotImplementedError:
-                signal.signal(event, lambda signum, frame: request_exit())
+        def request_exit(*_):
+            self.closing = True
+            loop.call_soon_threadsafe(task.cancel)
+
+        previous_signals = {}
+        for name in ('SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'):
+            event = getattr(signal, name, None)
+            if event is not None:
+                previous_signals[event] = signal.signal(event, request_exit)
         pending = asyncio.create_task(self.commands.get())
-        self.show_menu()
         try:
+            threading.Thread(target=receive, name='campusroute-input', daemon=True).start()
+            self.show_menu(self.settings_message)
             while True:
-                started = time.monotonic()
-                await self.tick()
-                await asyncio.wait({pending}, timeout=max(0, 0.2 - (time.monotonic() - started)))
+                # Process an already queued stop before sending another moving point.
                 if pending.done():
                     choice = pending.result()
-                    # 仅输入校验错误允许重新输入；设备及通信错误直接退出并执行清理。
-                    if choice in ('7', '8') and not self.connection:
-                        try:
+                    try:
+                        if choice in ('7', '8', '10', '11') and not self.connection:
+                            try:
+                                keep_running, message = await self.choose(choice)
+                            except (ValueError, FileNotFoundError) as error:
+                                keep_running, message = True, f'输入无效：{error}'
+                            except InstallationError as error:
+                                keep_running, message = True, str(error)
+                        else:
                             keep_running, message = await self.choose(choice)
-                        except (ValueError, FileNotFoundError) as error:
-                            keep_running, message = True, f'输入无效：{error}'
-                    else:
-                        keep_running, message = await self.choose(choice)
+                    except (SessionError, ConnectionError, OSError) as error:
+                        keep_running, message = True, await self.end_failed_session(error)
                     if not keep_running or self.closing:
                         break
                     self.show_menu(message)
                     pending = asyncio.create_task(self.commands.get())
+                    continue
+                started = time.monotonic()
+                try:
+                    await self.tick()
+                except (SessionError, ConnectionError, OSError) as error:
+                    self.show_menu(await self.end_failed_session(error))
+                await asyncio.wait({pending}, timeout=max(0, 0.2 - (time.monotonic() - started)))
+        except asyncio.CancelledError:
+            if not self.closing:
+                raise
         finally:
+            original_error = sys.exception()
+            input_closed.set()
             pending.cancel()
-            if reader_task is not None:
-                reader_task.cancel()
-            elif descriptor is not None:
-                loop.remove_reader(descriptor)
+            await asyncio.gather(pending, return_exceptions=True)
+            for event, handler in previous_signals.items():
+                signal.signal(event, handler)
             try:
                 had_connection = bool(self.connection and self.connection.simulated)
                 await self.restore()
                 print('\n已发送恢复真实定位指令，程序已退出。' if had_connection else '\n程序已退出。', flush=True)
+            except Exception as error:
+                if original_error is None:
+                    raise
+                print(f'\n清理时另有错误：{error}\n请在手机点击“停止并恢复”。', flush=True)
             finally:
                 if self.map_server:
                     self.map_server.close()
 
 
 def main():
-    parser = argparse.ArgumentParser(description='CampusRoute：iPhone 路线与定位调试工具')
+    parser = argparse.ArgumentParser(description='CampusRoute：Android / iPhone 路线与定位调试工具')
     parser.add_argument('--version', action='version', version=__version__)
     parser.add_argument('--root', type=Path, default=Path.cwd(), help='本地工作文件夹')
+    parser.add_argument('--backend', choices=('android', 'ios'),
+                        default='ios' if sys.platform == 'darwin' else 'android', help='设备后端')
+    parser.add_argument('--adb', help='adb 可执行文件路径')
     args = parser.parse_args()
-    if sys.platform not in ('darwin', 'win32'):
-        parser.error('设备控制窗口需要在 macOS 或 Windows 上运行。')
     logging.basicConfig(level=logging.WARNING, force=True)
     try:
         with runtime(args.root):
-            asyncio.run(ConsoleApp(args.root).run())
+            asyncio.run(ConsoleApp(args.root, args.backend, args.adb).run())
     except AlreadyRunningError as error:
         print(str(error), flush=True)
         return 2
     except Exception as error:
         print(f'\n操作已终止：{type(error).__name__}：{error}', flush=True)
-        print('连接中断时，请重新连接设备并执行菜单1、5；必要时重启手机恢复定位。', flush=True)
+        print('Android 请查看手机端状态，必要时点击“停止并恢复”；iPhone 请重新连接后执行菜单1、5。', flush=True)
         return 1
     return 0

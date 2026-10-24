@@ -1,0 +1,17 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'org.campusroute.android'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'org.campusroute.android'
+        minSdk 29
+        targetSdk 35
+        versionCode 112
+        versionName '1.1.2'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}

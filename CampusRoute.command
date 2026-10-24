@@ -13,7 +13,7 @@ task_python="$task_prefix/bin/python"
 
 task_environment_ready() {
     [[ -x "$task_python" ]] || return 1
-    "$task_python" -B -c 'import campusroute.console; from importlib.metadata import distribution; distribution("campusroute")' || return 1
+    "$task_python" -B "$task_root/tools/check_environment.py" --backend ios || return 1
     "$task_python" -B -m pip --no-cache-dir --disable-pip-version-check check
 }
 
@@ -40,6 +40,7 @@ if ! task_environment_ready >/dev/null 2>&1; then
         read -r 'task_reply?按回车关闭窗口。'
         exit 1
     fi
+    "$task_python" -B -m pip install --no-cache-dir -e '.[ios]' || exit 1
     if ! task_environment_ready; then
         print '环境校验未通过。请根据上方错误完成处理，再次打开后选择1继续。'
         read -r 'task_reply?按回车关闭窗口。'

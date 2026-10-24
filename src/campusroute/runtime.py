@@ -1,4 +1,6 @@
+import hashlib
 import os
+import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -8,73 +10,95 @@ class AlreadyRunningError(RuntimeError):
     pass
 
 
-class _WindowsDirectoryLock:
-    def __init__(self, root: Path):
-        self.path = root / 'work' / '.campusroute.lock'
-        self.handle = None
+@contextmanager
+def console_output():
+    if sys.platform != 'win32' or not sys.stdout.isatty():
+        yield
+        return
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
 
-    def acquire(self):
-        import msvcrt
+    try:
+        handle = msvcrt.get_osfhandle(sys.stdout.fileno())
+    except (OSError, ValueError):
+        yield
+        return
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.GetConsoleMode.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    kernel.GetConsoleMode.restype = wintypes.BOOL
+    kernel.SetConsoleMode.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel.SetConsoleMode.restype = wintypes.BOOL
+    previous = wintypes.DWORD()
+    changed = kernel.GetConsoleMode(handle, ctypes.byref(previous)) and kernel.SetConsoleMode(handle, previous.value | 0x0004)
+    try:
+        yield
+    finally:
+        if changed:
+            kernel.SetConsoleMode(handle, previous.value)
 
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.handle = self.path.open('a+b')
+
+@contextmanager
+def instance_lock(root: Path):
+    if sys.platform == 'win32':
+        import ctypes
+        from ctypes import wintypes
+
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.CreateMutexW.argtypes = (ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR)
+        kernel.CreateMutexW.restype = wintypes.HANDLE
+        kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel.CloseHandle.restype = wintypes.BOOL
+        identity = os.path.normcase(str(root.resolve())).encode('utf-8')
+        name = 'Local\\CampusRoute-' + hashlib.sha256(identity).hexdigest()
+        ctypes.set_last_error(0)
+        handle = kernel.CreateMutexW(None, False, name)
+        error = ctypes.get_last_error()
+        if not handle:
+            raise ctypes.WinError(error)
         try:
-            if self.handle.seek(0, os.SEEK_END) == 0:
-                self.handle.write(b'\0')
-                self.handle.flush()
-            self.handle.seek(0)
-            msvcrt.locking(self.handle.fileno(), msvcrt.LK_NBLCK, 1)
-        except OSError:
-            self.handle.close()
-            self.handle = None
-            raise BlockingIOError from None
-
-    def release(self):
-        if self.handle is None:
-            return
-        import msvcrt
-
-        try:
-            self.handle.seek(0)
-            msvcrt.locking(self.handle.fileno(), msvcrt.LK_UNLCK, 1)
+            if error == 183:
+                raise AlreadyRunningError('操作窗口已经打开，请使用现有窗口。')
+            yield
         finally:
-            self.handle.close()
-            self.handle = None
+            kernel.CloseHandle(handle)
+    else:
+        import fcntl
+
+        descriptor = os.open(root, os.O_RDONLY)
+        try:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise AlreadyRunningError('操作窗口已经打开，请使用现有窗口。') from None
+            yield
+        finally:
+            os.close(descriptor)
 
 
 @contextmanager
 def runtime(root: Path):
-    windows_lock = None
-    descriptor = None
-    try:
-        try:
-            if os.name == 'nt':
-                windows_lock = _WindowsDirectoryLock(root)
-                windows_lock.acquire()
-            else:
-                import fcntl
-
-                descriptor = os.open(root, os.O_RDONLY)
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise AlreadyRunningError('操作窗口已经打开，请使用现有窗口。') from None
+    root = root.resolve()
+    with instance_lock(root):
         cache = root / 'work' / '.cache'
         cache.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='run-', dir=cache) as directory:
             previous_directory = tempfile.tempdir
-            previous_environment = os.environ.get('TMPDIR')
+            previous_environment = {key: os.environ.get(key) for key in ('TMPDIR', 'TEMP', 'TMP')}
             tempfile.tempdir = directory
-            os.environ['TMPDIR'] = directory
+            os.environ.update({key: directory for key in previous_environment})
+            if sys.platform == 'win32':
+                import ctypes
+                ctypes.windll.kernel32.SetThreadExecutionState(0x80000001)
             try:
-                yield
+                with console_output():
+                    yield
             finally:
+                if sys.platform == 'win32':
+                    ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
                 tempfile.tempdir = previous_directory
-                if previous_environment is None:
-                    os.environ.pop('TMPDIR', None)
-                else:
-                    os.environ['TMPDIR'] = previous_environment
-    finally:
-        if windows_lock is not None:
-            windows_lock.release()
-        if descriptor is not None:
-            os.close(descriptor)
+                for key, value in previous_environment.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
