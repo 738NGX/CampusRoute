@@ -1,8 +1,10 @@
 # Android 使用说明
 
+[返回首页](../README.md) · [使用手册](usage.md)
+
 ## 设备要求
 
-- Windows 10/11 64 位，Python 最低要求为3.11；版本验证范围见 [README](../README.md#python-版本与平台支持)。
+- Windows 10/11 64 位，Python 最低要求为3.11；版本验证范围见 [首页](../README.md#开始之前)。
 - Android 10 或更新版本，能够授权 USB 调试和模拟位置信息应用。
 - 支持数据传输的数据线，以及 Android SDK Platform-Tools。Windows 可能需要手机厂商提供的 USB 驱动。
 - 构建 APK 需要 JDK 17 或更新版本，以及 Android SDK 平台35和 Build-Tools 35.0.0。
@@ -14,7 +16,7 @@
 1. 安装 [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)，将 `adb` 加入 PATH。也可以解压到项目内 `work/android-sdk/platform-tools/`。
 2. 手机开启 USB 调试，连接电脑、解锁并允许调试。`adb devices -l` 应显示 `device`。
 3. 双击 `CampusRoute.cmd`。首次启动自动创建 `.venv` 并安装依赖。指定 Python 使用 `./CampusRoute.ps1 -Python 'Python完整路径'`，升级或修复使用 `./CampusRoute.ps1 -Upgrade`。
-4. 选择菜单10，安装 `build/android/CampusRoute-debug.apk`，或者输入自行构建的 APK 路径。保持手机解锁并确认安装。
+4. 选择菜单10，安装完整下载包中的 `build/android/CampusRoute-debug.apk`，或者输入单独下载／自行构建的 APK 路径。保持手机解锁并确认安装。GitHub 自动生成的源码包没有预置 APK，可以在同一发布页单独下载。
 5. 使用菜单7选择路线、菜单8设置配速与距离、菜单1连接手机。在手机开发者选项中选择 CampusRoute 为模拟位置信息应用，允许定位权限，再点击“启动接收”。
 6. 电脑显示起点准备完成后，选择2开始、3暂停、4中止、5恢复定位、0退出。
 
